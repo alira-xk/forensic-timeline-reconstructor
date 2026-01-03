@@ -1,6 +1,0 @@
-src/screens/CaseDetailScreen.tsx(71,25): error TS2322: Type '{ title: string; onPress: () => Promise<void>; variant: "secondary"; style: { flex: number; }; icon: Element; }' is not assignable to type 'IntrinsicAttributes & ButtonProps'.
-  Property 'icon' does not exist on type 'IntrinsicAttributes & ButtonProps'.
-src/screens/CaseDetailScreen.tsx(79,25): error TS2322: Type '{ title: string; onPress: () => void; variant: "primary"; style: { flex: number; }; isLoading: boolean; icon: Element; }' is not assignable to type 'IntrinsicAttributes & ButtonProps'.
-  Property 'icon' does not exist on type 'IntrinsicAttributes & ButtonProps'.
-src/screens/DashboardScreen.tsx(52,25): error TS2322: Type '{ title: string; onPress: () => void; variant: "primary"; style: { width: "100%"; }; icon: Element; }' is not assignable to type 'IntrinsicAttributes & ButtonProps'.
-  Property 'icon' does not exist on type 'IntrinsicAttributes & ButtonProps'.
