@@ -33,8 +33,8 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
          */}
                 <View style={[styles.header, { borderColor: theme.colors.border }]}>
                     <View>
-                        <Text style={[styles.brandTitle, { color: theme.colors.text.secondary }]}>INVESTIGATOR WORKSPACE</Text>
-                        <Text style={[styles.welcome, { color: theme.colors.text.primary }]}>Welcome back, Investigator</Text>
+                        <Text style={[styles.brandTitle, { color: theme.colors.text.secondary }]}>CASE MANAGEMENT</Text>
+                        <Text style={[styles.welcome, { color: theme.colors.text.primary }]}>Welcome back, Hassan</Text>
                     </View>
                     <View style={styles.headerRight}>
                         {/* Mobile Settings Icon - Sidebar handles this on Web */}
@@ -48,7 +48,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                         )}
                         <View style={[styles.badge, { backgroundColor: theme.colors.surfaceHighlight, borderColor: theme.colors.border }]}>
                             <Shield size={14} color={theme.colors.primary} />
-                            <Text style={[styles.badgeText, { color: theme.colors.text.primary }]}>AUTH LEVEL 3</Text>
+                            <Text style={[styles.badgeText, { color: theme.colors.text.primary }]}>ROLE: LEAD INVESTIGATOR</Text>
                         </View>
                     </View>
                 </View>

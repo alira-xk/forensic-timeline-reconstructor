@@ -6,7 +6,8 @@ import { Button } from '../components/Button';
 import { useTheme } from '../theme/ThemeContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
-import { Shield, Sun, Moon } from 'lucide-react-native';
+import { Sun, Moon } from 'lucide-react-native';
+import { AppLogo } from '../components/AppLogo';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -48,11 +49,8 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
                     showsVerticalScrollIndicator={false}
                 >
                     <View style={styles.header}>
-                        <View style={[styles.logoContainer, {
-                            backgroundColor: theme.colors.primary,
-                            shadowColor: theme.shadows.floating.shadowColor
-                        }]}>
-                            <Shield size={48} color="#FFF" strokeWidth={1.5} />
+                        <View style={styles.logoContainer}>
+                            <AppLogo size={96} />
                         </View>
                         <Text style={[styles.title, { color: theme.colors.text.primary }]}>FORENSIC TIMELINE</Text>
                         <Text style={[styles.subtitle, { color: theme.colors.text.secondary }]}>RECONSTRUCTOR</Text>
@@ -64,34 +62,45 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
                         borderColor: theme.colors.border,
                         shadowColor: theme.shadows.card.shadowColor
                     }]}>
-                        <Text style={[styles.loginHeader, { color: theme.colors.text.primary }]}>System Access</Text>
+                        <Text style={[styles.loginHeader, { color: theme.colors.text.primary }]}>Login</Text>
 
                         <Input
-                            label="Email Address or User ID"
-                            placeholder="user.id@forensic.lab"
+                            label="Email Address or ID"
+                            placeholder="user.id@example.com"
                             value={email}
                             onChangeText={setEmail}
                             autoCapitalize="none"
                         />
                         <Input
                             label="Password"
-                            placeholder="Enter security key..."
+                            placeholder="Enter password..."
                             value={password}
                             onChangeText={setPassword}
                             secureTextEntry
                         />
 
+                        <TouchableOpacity style={styles.forgotPass}>
+                            <Text style={[styles.forgotText, { color: theme.colors.primary }]}>Forgot password?</Text>
+                        </TouchableOpacity>
+
                         <Button
-                            title="AUTHENTICATE"
+                            title="LOGIN"
                             onPress={handleLogin}
                             isLoading={isLoading}
                             style={styles.button}
                         />
 
-                        <Text style={[styles.disclaimer, { color: theme.colors.text.muted }]}>
-                            Protected System. Activity is logged and audited.
-                            Unauthorized access will be prosecuted.
-                        </Text>
+                        <View style={styles.dividerRow}>
+                            <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+                            <Text style={[styles.dividerText, { color: theme.colors.text.muted }]}>OR</Text>
+                            <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+                        </View>
+
+                        <Button
+                            title="Sign up"
+                            variant="outline"
+                            onPress={() => { }}
+                        />
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -135,6 +144,7 @@ const styles = StyleSheet.create({
         borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
+        paddingLeft: 4, // Nudge logo slightly right as per user request
         marginBottom: 24,
         elevation: 4,
         shadowOffset: { width: 0, height: 4 },
@@ -175,16 +185,38 @@ const styles = StyleSheet.create({
     button: {
         marginTop: 8,
     },
+    forgotPass: {
+        alignSelf: 'flex-end',
+        marginBottom: 24,
+        marginTop: -8,
+    },
+    forgotText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
     loginHeader: {
         fontSize: 18,
         fontWeight: '700',
         marginBottom: 24,
         textAlign: 'center',
     },
-    disclaimer: {
+    dividerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: 24,
+        gap: 12,
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+    },
+    dividerText: {
         fontSize: 11,
-        textAlign: 'center',
-        marginTop: 24,
-        lineHeight: 16,
+        fontWeight: '500',
+    },
+    socialRow: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: 8,
     },
 });

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { ScreenWrapper } from '../components/ScreenWrapper';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
@@ -65,13 +65,35 @@ export const CasesListScreen: React.FC<Props> = ({ navigation }) => {
                 <Text style={[styles.title, { color: theme.colors.text.primary }]}>All Cases</Text>
             </View>
 
-            <View style={styles.searchContainer}>
-                <Input
-                    placeholder="Search by name, ID, or tag..."
-                    value={search}
-                    onChangeText={setSearch}
-                    style={styles.searchBar}
-                />
+            {/* Filter Bar (Collapsible / Inline) */}
+            <View style={[styles.controlsContainer, { borderBottomColor: theme.colors.border }]}>
+                <View style={styles.searchRow}>
+                    <Input
+                        placeholder="Search cases..."
+                        value={search}
+                        onChangeText={setSearch}
+                        style={styles.searchBar}
+                    />
+                </View>
+
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.filterRow}
+                >
+                    <TouchableOpacity style={[styles.filterBtn, { borderColor: theme.colors.border }]}>
+                        <Text style={[styles.filterText, { color: theme.colors.text.secondary }]}>Status: All</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.filterBtn, { borderColor: theme.colors.border }]}>
+                        <Text style={[styles.filterText, { color: theme.colors.text.secondary }]}>Date Range</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.filterBtn, { borderColor: theme.colors.border }]}>
+                        <Text style={[styles.filterText, { color: theme.colors.text.secondary }]}>Assigned To</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.filterBtnActive, { backgroundColor: theme.colors.surfaceHighlight, borderColor: theme.colors.primary }]}>
+                        <Text style={[styles.filterTextActive, { color: theme.colors.primary }]}>Sort: Recent</Text>
+                    </TouchableOpacity>
+                </ScrollView>
             </View>
 
             <FlatList
@@ -100,12 +122,40 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         marginBottom: 16,
     },
-    searchContainer: {
+    controlsContainer: {
         paddingHorizontal: 24,
-        marginBottom: 8,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+    },
+    searchRow: {
+        marginBottom: 12,
     },
     searchBar: {
         marginBottom: 0,
+    },
+    filterRow: {
+        gap: 8,
+    },
+    filterBtn: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 6,
+        borderWidth: 1,
+        backgroundColor: 'transparent',
+    },
+    filterBtnActive: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 6,
+        borderWidth: 1,
+    },
+    filterText: {
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    filterTextActive: {
+        fontSize: 12,
+        fontWeight: '700',
     },
     list: {
         padding: 24,

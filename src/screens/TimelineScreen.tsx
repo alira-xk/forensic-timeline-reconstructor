@@ -35,34 +35,57 @@ export const TimelineScreen: React.FC = () => {
     const renderEvent = ({ item }: { item: typeof EVENTS[0] }) => {
         const statusColor = getStatusColor(item);
 
+        // Mock data logic for new fields (normally would be in item)
+        const confidence = item.conflict ? 'LOW' : (item.inferred ? 'MEDIUM' : 'HIGH');
+        const origin = item.type === 'location' ? 'CLOUD API' : (item.type === 'message' ? 'SIM EXTRACTION' : 'DEVICE LOGS');
+
         return (
             <View style={styles.timelineRow}>
-                {/* Timestamp Column */}
-                <View style={styles.timeColumn}>
+                {/* Timestamp Column - Compact */}
+                <View style={[styles.timeColumn, { borderRightColor: theme.colors.border }]}>
                     <Text style={[styles.timeText, { color: theme.colors.text.primary }]}>{item.time}</Text>
                     <Text style={[styles.dateText, { color: theme.colors.text.muted }]}>{item.date}</Text>
                 </View>
 
-                {/* Visual Line */}
+                {/* Visual Line & Dot */}
                 <View style={styles.lineWrapper}>
                     <View style={[styles.dot, {
                         borderColor: statusColor,
-                        backgroundColor: theme.colors.surface
+                        backgroundColor: item.conflict ? theme.colors.status.error : theme.colors.surface
                     }]} />
                     <View style={[styles.line, { backgroundColor: theme.colors.border }]} />
                 </View>
 
-                {/* Event Content */}
+                {/* Event Content - Dense & Structured */}
                 <View style={styles.eventContent}>
-                    <Card style={[styles.eventCard, { borderLeftColor: statusColor, borderLeftWidth: 4 }]}>
-                        <View style={styles.eventHeader}>
-                            <View style={styles.sourceBadge}>
+                    <Card style={[styles.eventCard, {
+                        borderLeftColor: statusColor,
+                        borderLeftWidth: 3, // Thinner accent
+                        backgroundColor: item.conflict ? 'rgba(254, 226, 226, 0.1)' : theme.colors.surface
+                    }]}>
+
+                        {/* Header Row: Type Icon | Source | Confidence */}
+                        <View style={styles.cardHeaderRow}>
+                            <View style={styles.badgeGroup}>
                                 {getIcon(item.type)}
-                                <Text style={[styles.sourceText, { color: theme.colors.text.secondary }]}>{item.source}</Text>
+                                <Text style={[styles.sourceText, { color: theme.colors.text.primary }]}>{item.source}</Text>
+                                <Text style={[styles.metaDivider, { color: theme.colors.border }]}>|</Text>
+                                <Text style={[styles.originText, { color: theme.colors.text.muted }]}>{origin}</Text>
                             </View>
-                            {item.conflict && <Text style={[styles.conflictBadge, { color: theme.colors.status.error }]}>CONFLICT</Text>}
+
+                            <View style={styles.metaRight}>
+                                <Text style={[styles.confidenceLabel, {
+                                    color: confidence === 'HIGH' ? theme.colors.status.success : (confidence === 'LOW' ? theme.colors.status.error : theme.colors.status.warning)
+                                }]}>
+                                    {confidence} CONFIDENCE
+                                </Text>
+                            </View>
                         </View>
+
+                        {/* Main Content */}
                         <Text style={[styles.eventText, { color: theme.colors.text.primary }]}>{item.content}</Text>
+
+                        {/* Footer (if expandable details needed later) */}
                     </Card>
                 </View>
             </View>
@@ -215,72 +238,94 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     timeColumn: {
-        width: 80,
+        width: 85,
         alignItems: 'flex-end',
-        paddingTop: 12,
-        marginRight: 8,
+        paddingTop: 4, // Align with first line of text
+        marginRight: 12,
+        paddingRight: 12, // Visual separator space
+        borderRightWidth: 1, // Vertical divider line
+        borderRightColor: 'rgba(0,0,0,0.05)',
     },
     timeText: {
         fontWeight: '700',
-        fontSize: 13,
+        fontSize: 12,
         fontVariant: ['tabular-nums'],
     },
     dateText: {
         fontSize: 10,
         marginTop: 2,
+        opacity: 0.8,
     },
     lineWrapper: {
         alignItems: 'center',
-        width: 24,
+        width: 16,
         marginRight: 8,
+        marginLeft: -9, // Pull back to align with border
     },
     dot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
         borderWidth: 2,
-        marginTop: 16,
-        zIndex: 1,
+        marginTop: 8,
+        zIndex: 5,
     },
     line: {
         flex: 1,
         width: 1,
         position: 'absolute',
-        top: 16,
-        bottom: -10,
+        top: 0,
+        bottom: 0,
     },
     eventContent: {
         flex: 1,
+        paddingBottom: 8,
     },
     eventCard: {
-        marginBottom: 4,
-        padding: 8,
+        marginBottom: 0,
+        padding: 10,
+        borderRadius: 4, // Sharper corners for pro feel
+        borderWidth: 1,
+        borderColor: 'transparent', // Let shadow define edges or subtle border
     },
-    eventHeader: {
+    cardHeaderRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 4,
+        marginBottom: 6,
     },
-    sourceBadge: {
+    badgeGroup: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
     },
     sourceText: {
-        fontSize: 11,
-        fontWeight: '600',
+        fontSize: 10,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    metaDivider: {
+        fontSize: 10,
+        marginHorizontal: 2,
+    },
+    originText: {
+        fontSize: 10,
+        fontWeight: '500',
         textTransform: 'uppercase',
     },
-    eventText: {
-        fontSize: 14,
-        lineHeight: 20,
+    metaRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
-    conflictBadge: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        backgroundColor: '#FEE2E2',
-        paddingHorizontal: 4,
-        borderRadius: 2,
+    confidenceLabel: {
+        fontSize: 9,
+        fontWeight: '800',
+        letterSpacing: 0.5,
+    },
+    eventText: {
+        fontSize: 13, // Slightly smaller for density
+        lineHeight: 18,
+        fontWeight: '500',
     },
 });

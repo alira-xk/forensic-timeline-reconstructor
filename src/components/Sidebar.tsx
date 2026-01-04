@@ -2,8 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../theme/ThemeContext';
-import { Shield, LayoutDashboard, FolderOpen, Activity, User } from 'lucide-react-native';
+import { LayoutDashboard, FolderOpen, Activity, User } from 'lucide-react-native';
 import { SettingsPopup } from './SettingsPopup';
+import { AppLogo } from './AppLogo';
 
 export const Sidebar: React.FC = () => {
     const { theme } = useTheme();
@@ -22,10 +23,9 @@ export const Sidebar: React.FC = () => {
             borderRightColor: theme.colors.border,
             borderRightWidth: 1
         }]}>
-            {/* Brand Header */}
             <View style={styles.header}>
-                <View style={[styles.logoBadge, { backgroundColor: theme.colors.primary }]}>
-                    <Shield size={24} color="#FFF" />
+                <View style={styles.logoBadge}>
+                    <AppLogo size={32} />
                 </View>
                 <View>
                     <Text style={[styles.brandTitle, { color: theme.colors.text.primary }]}>FORENSIC</Text>
@@ -47,6 +47,24 @@ export const Sidebar: React.FC = () => {
                         <Text style={[styles.navLabel, { color: theme.colors.text.secondary }]}>{item.label}</Text>
                     </TouchableOpacity>
                 ))}
+            </View>
+
+            {/* Case Summary Widget (Web specific) */}
+            <View style={[styles.statsWidget, { backgroundColor: theme.colors.background }]}>
+                <Text style={[styles.statsTitle, { color: theme.colors.text.muted }]}>ACTIVE CASE SUMMARY</Text>
+
+                <View style={styles.statRow}>
+                    <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>Pending Analysis</Text>
+                    <Text style={[styles.statValue, { color: theme.colors.accent }]}>12</Text>
+                </View>
+                <View style={styles.statRow}>
+                    <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>Conflicts</Text>
+                    <Text style={[styles.statValue, { color: theme.colors.status.error }]}>3</Text>
+                </View>
+                <View style={[styles.statRow, { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8, marginTop: 4 }]}>
+                    <Text style={[styles.statLabel, { color: theme.colors.text.muted }]}>Processing</Text>
+                    <Text style={[styles.statValue, { color: theme.colors.status.success, fontSize: 10 }]}>COMPLETE</Text>
+                </View>
             </View>
 
             {/* Footer Actions */}
@@ -145,5 +163,31 @@ const styles = StyleSheet.create({
     },
     profileRole: {
         fontSize: 10,
+    },
+    statsWidget: {
+        padding: 16,
+        borderRadius: 8,
+        marginBottom: 24,
+    },
+    statsTitle: {
+        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 1,
+        marginBottom: 12,
+    },
+    statRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    statLabel: {
+        fontSize: 11,
+        fontWeight: '500',
+    },
+    statValue: {
+        fontSize: 12,
+        fontWeight: '700',
+        fontVariant: ['tabular-nums'],
     }
 });
