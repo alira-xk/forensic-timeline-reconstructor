@@ -1,0 +1,10 @@
+const express = require('express');
+const { authenticate } = require('../middleware/auth');
+const tc = require('../controllers/timeline.controller');
+const router = express.Router();
+router.use(authenticate);
+router.get('/case/:caseId', tc.getTimeline);
+router.get('/summary/:caseId', tc.getTimelineSummary);
+router.get('/filters/:caseId', tc.getFilterOptions);
+router.put('/bookmark/:eventId', tc.toggleBookmark);
+module.exports = router;
