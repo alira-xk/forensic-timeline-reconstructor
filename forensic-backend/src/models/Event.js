@@ -42,7 +42,7 @@ const eventSchema = new mongoose.Schema(
     },
     eventSource: {
       type: String,
-      enum: ['docx', 'pdf', 'image', 'log', 'txt'],
+      enum: ['doc', 'docx', 'pdf', 'image', 'log', 'txt'],
       required: true,
     },
     title: {

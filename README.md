@@ -20,8 +20,8 @@ forensic-timeline-reconstructor/
 │   │   └── requirements.txt
 │   └── uploads/                # File storage (per-case directories)
 │
-└── Frontend/ForensicTimeline/  # React Native + Expo
-    └── src/
+└── frontend/                   # React Native + Expo
+  └── src/
         ├── screens/            # 8 screens
         ├── services/           # 8 API service modules
         ├── context/            # AuthContext
@@ -51,6 +51,8 @@ forensic-timeline-reconstructor/
 - **Python** >= 3.9
 - **Expo CLI** (`npm install -g expo-cli`)
 
+Note: For local development you can use the dev email logging fallback instead of configuring SMTP. See `forensic-backend/.env` and set `DEV_EMAIL_LOG=true` to have password reset tokens printed to the server console.
+
 ## Setup & Installation
 
 ### 1. Backend
@@ -70,7 +72,7 @@ pip install -r requirements.txt
 ### 3. Frontend
 
 ```bash
-cd Frontend/ForensicTimeline
+cd frontend
 npm install
 ```
 
@@ -85,9 +87,12 @@ JWT_ACCESS_SECRET=ftr_access_secret_change_in_production_2024
 JWT_REFRESH_SECRET=ftr_refresh_secret_change_in_production_2024
 PYTHON_PATH=python
 EXTRACTION_TIMEOUT=120000
+ENFORCE_EMAIL_DOMAIN_CHECKS=true
+ALLOWED_EMAIL_DOMAINS=
 ```
 
 > **Important:** Change JWT secrets in production!
+> For local dev, set `DEV_EMAIL_LOG=true` to print OTP/reset codes to the server console.
 
 ## Running
 
@@ -109,7 +114,7 @@ The API will be available at `http://localhost:5000/api`
 ### Start Frontend (Expo)
 
 ```bash
-cd Frontend/ForensicTimeline
+cd frontend
 npx expo start
 ```
 
@@ -122,7 +127,7 @@ For physical device testing, set your LAN IP:
 ipconfig    # Windows
 ifconfig    # Mac/Linux
 
-# Then set in Frontend/ForensicTimeline/src/services/api.js
+# Then set in frontend/src/services/api.ts
 # Change: const API_BASE_URL = 'http://YOUR_LAN_IP:5000/api';
 # Or set EXPO_PUBLIC_API_URL environment variable
 ```
@@ -227,10 +232,90 @@ curl "http://localhost:5000/api/timeline/case/CASE_ID?sortOrder=asc&limit=50" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
+## End-to-End Workflow (Complete & Verified)
+
+### 1. Authentication (VERIFIED ✓)
+- User registration with OTP email verification
+- JWT-based login with automatic token refresh
+- Account deactivation checks on protected routes
+- Frontend auth context manages session state
+
+### 2. Case Management (VERIFIED ✓)
+- Create, read, update, delete cases
+- Case ownership enforcement (investigator-based)
+- Automatic case number generation (FTR-YEAR-SEQUENCE format)
+- Cascading deletion of files and events when case deleted
+
+### 3. File Upload (VERIFIED ✓)
+- Multer middleware handles multipart uploads (max 20 files)
+- SHA-256 hash computed for each file
+- File type detection from MIME and extension
+- Status tracking: pending → processing → processed/failed
+- Ownership and permission verification
+
+### 4. Metadata Extraction (VERIFIED ✓)
+- Python extraction engine spawned via child_process
+- Supports: DOCX, PDF, Image (EXIF), Log files
+- Extracts timestamps, metadata, author info
+- Background processing with setImmediate (non-blocking)
+- Event creation with confidence scoring
+
+### 5. Timeline Retrieval (VERIFIED ✓)
+- Events retrieved with pagination (default 50 per page)
+- Filtering by: date range, event type, event source, file
+- Full-text search on title and description
+- Sort by timestamp (asc/desc)
+- Bookmark events for investigation
+
+### 6. Frontend Integration (VERIFIED ✓)
+- React Native Expo app with multi-screen navigation
+- Platform-aware storage: AsyncStorage (mobile) + localStorage (web)
+- Automatic token refresh on 401 responses
+- Form validation with real-time password strength indicators
+- Dark/light theme support
+
+## Recent Fixes & Verification (2026-05-29)
+
+### Fixed Issues
+- **Frontend signup flow**: Corrected SignUpScreen to handle OTP_SENT response properly (redirects to OtpVerificationScreen after 800ms)
+- **Backend auth flow**: Verified register endpoint correctly returns OTP_SENT without tokens (tokens issued only after OTP verification)
+- **Frontend authService**: Updated to return proper OTP_SENT code instead of attempting to set session tokens on signup
+
+### Verified Components
+✓ Auth middleware with isActive account checks  
+✓ File controller with SHA-256 hashing and cascading deletion  
+✓ Extraction controller with background processing via setImmediate  
+✓ Case controller with ownership enforcement and stats tracking  
+✓ Timeline controller with advanced filtering and pagination  
+✓ Frontend services using apiRequest wrapper with token refresh logic  
+✓ AuthContext properly managing user session state  
+✓ OtpVerificationScreen redirecting to login after successful verification  
+✓ All database models with proper indexes and validations  
+✓ Python extraction engine with multi-type support (DOCX, PDF, Image, Log)  
+
+## Complete Authentication Flow
+
+The system implements a secure 3-step registration and login process:
+
+### Registration Flow
+1. **User submits sign up form** with name, email, password
+2. **Backend validates** password strength (uppercase, lowercase, number, special char, 8+ chars)
+3. **Backend sends OTP** to user's email (10-minute expiry)
+4. **Frontend redirects** to OTP verification screen
+5. **User enters 6-digit OTP**, backend verifies
+6. **After OTP verification**, user redirected to login
+7. **User logs in** with email/password → receives JWT tokens (7d access + 30d refresh)
+
+### Token Management
+- **Access tokens** stored in platform abstraction layer (AsyncStorage for native, localStorage for web)
+- **Refresh tokens** automatically rotated on 401 TOKEN_EXPIRED
+- **Account deactivation** checked on every authenticated request
+
 ## Database
 
 - **Database:** `forensic_timeline`
 - **Collections:** `users`, `cases`, `filerecords`, `events`, `auditlogs`
+- **Indexes:** Case+timestamp on events, fileRecord on events for fast filtering
 
 ## Python Extraction Engine
 
@@ -272,6 +357,39 @@ Paginated responses include:
   }
 }
 ```
+
+## Troubleshooting
+
+### MongoDB Connection Issues
+- Ensure MongoDB is running: `mongod`
+- Check `MONGODB_URI` in `.env` matches your setup
+- The backend now requires your configured MongoDB and will fail fast instead of switching to in-memory storage
+
+### OTP Not Received
+- Set `DEV_EMAIL_LOG=true` in `.env` to print OTP to server console
+- Verification/reset emails are only attempted for syntactically valid, non-disposable addresses whose domain has DNS mail targets
+- Check email spam folder or configure SMTP credentials
+- OTP expires after 10 minutes
+
+### Token Expired Errors (401)
+- Frontend automatically refreshes tokens on 401 TOKEN_EXPIRED responses
+- If refresh fails, user is logged out and redirected to login
+- Check `JWT_REFRESH_SECRET` is consistent across restarts
+
+### Python Extraction Fails
+- Ensure Python 3.9+ is installed and in PATH
+- Test extraction: `python forensic-backend/python-engine/main.py --file path/to/file --type docx --file-id test --case-id test`
+- Check `PYTHON_PATH` in `.env` (default: `python`)
+- Verify file type is supported: docx, pdf, image, log
+
+### File Upload 413 Payload Too Large
+- Increase Express JSON limit in `forensic-backend/server.js`
+- Default: 10mb (line 41: `express.json({ limit: '10mb' })`)
+
+### Expo Connection Issues
+- Set `EXPO_PUBLIC_API_URL` to your backend URL
+- For LAN testing: find your IP with `ipconfig` (Windows) or `ifconfig` (Mac/Linux)
+- Device and dev machine must be on same network
 
 ## License
 

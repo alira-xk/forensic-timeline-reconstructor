@@ -1,9 +1,85 @@
-import { API_BASE_URL } from './api';
+import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import { API_BASE_URL, getAccessToken } from './api';
 
 export const getExportJsonUrl = (caseId: string) => {
-  return `${API_BASE_URL}/cases/${caseId}/export/json`;
+  return `${API_BASE_URL}/export/json/${caseId}`;
 };
 
 export const getExportCsvUrl = (caseId: string) => {
-  return `${API_BASE_URL}/cases/${caseId}/export/csv`;
+  return `${API_BASE_URL}/export/csv/${caseId}`;
 };
+
+type ExportFormat = 'json' | 'csv';
+
+const getFilenameFromHeaders = (headers: Headers, fallback: string) => {
+  const disposition = headers.get('content-disposition') || '';
+  const match = disposition.match(/filename="?([^"]+)"?/i);
+  return match?.[1] || fallback;
+};
+
+const downloadOnWeb = (content: string, filename: string, mimeType: string) => {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+};
+
+const saveOnNative = async (content: string, filename: string) => {
+  const fileUri = `${FileSystem.documentDirectory}${filename}`;
+  await FileSystem.writeAsStringAsync(fileUri, content, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+  return fileUri;
+};
+
+export const exportTimeline = async (caseId: string, format: ExportFormat) => {
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    throw new Error('You must be logged in to export files.');
+  }
+
+  const endpoint =
+    format === 'json'
+      ? getExportJsonUrl(caseId)
+      : getExportCsvUrl(caseId);
+
+  const response = await fetch(endpoint, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  const content = await response.text();
+
+  if (!response.ok) {
+    try {
+      const errorData = JSON.parse(content);
+      throw new Error(errorData.message || 'Export failed.');
+    } catch (error: any) {
+      throw new Error(error.message || 'Export failed.');
+    }
+  }
+
+  const mimeType = format === 'json' ? 'application/json' : 'text/csv';
+  const filename = getFilenameFromHeaders(
+    response.headers,
+    `timeline_export_${Date.now()}.${format}`
+  );
+
+  if (Platform.OS === 'web') {
+    downloadOnWeb(content, filename, mimeType);
+    return { filename };
+  }
+
+  const fileUri = await saveOnNative(content, filename);
+  return { filename, fileUri };
+};
+
+export const exportTimelineJson = (caseId: string) => exportTimeline(caseId, 'json');
+export const exportTimelineCsv = (caseId: string) => exportTimeline(caseId, 'csv');

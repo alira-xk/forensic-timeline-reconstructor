@@ -1,9 +1,11 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 export type RootStackParamList = {
-  OtpVerification: { email: string };
   Login: undefined;
   SignUp: { email?: string } | undefined;
+  ForgotPassword: undefined;
+  ResetPassword: { email?: string } | undefined;
+  OtpVerification: { email: string };
   Main: undefined;
   CreateCase: undefined;
   Settings: undefined;

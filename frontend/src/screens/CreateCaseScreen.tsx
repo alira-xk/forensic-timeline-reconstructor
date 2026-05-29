@@ -38,7 +38,7 @@ export const CreateCaseScreen: React.FC<Props> = ({ navigation }) => {
       await createCase({
         title: title.trim(),
         description: description.trim(),
-        status: 'Active',
+        status: 'open',
       });
 
       Alert.alert('Success', 'Case created successfully.');

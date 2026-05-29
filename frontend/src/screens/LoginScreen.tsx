@@ -130,15 +130,11 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
             </View>
 
             <Text style={[styles.title, { color: theme.colors.text.primary }]}>
-              FORENSIC TIMELINE
+              Forensic Timeline
             </Text>
 
             <Text style={[styles.subtitle, { color: theme.colors.text.secondary }]}>
-              RECONSTRUCTOR
-            </Text>
-
-            <Text style={[styles.systemLabel, { color: theme.colors.text.muted }]}>
-              Digital Evidence Analysis System
+              Evidence reconstruction workspace
             </Text>
           </View>
 
@@ -159,11 +155,11 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
 
               <View>
                 <Text style={[styles.loginHeader, { color: theme.colors.text.primary }]}>
-                  Investigator Login
+                  Sign in
                 </Text>
 
                 <Text style={[styles.loginSubtext, { color: theme.colors.text.secondary }]}>
-                  Access your forensic cases and evidence timelines.
+                  Continue to your cases, evidence files, and timelines.
                 </Text>
               </View>
             </View>
@@ -192,6 +188,14 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
               }}
               secureTextEntry
             />
+
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ForgotPassword')}
+              style={styles.forgotLink}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.forgotText, { color: theme.colors.primary }]}>Forgot password?</Text>
+            </TouchableOpacity>
 
             {formError ? (
               <View
@@ -240,7 +244,7 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
               activeOpacity={0.8}
             >
               <Text style={[styles.signupText, { color: theme.colors.text.secondary }]}>
-                New investigator?
+                Need access?
               </Text>
 
               <Text style={[styles.signupLink, { color: theme.colors.primary }]}>
@@ -266,7 +270,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 40,
+    paddingVertical: 32,
   },
   themeToggle: {
     position: 'absolute',
@@ -275,72 +279,77 @@ const styles = StyleSheet.create({
     zIndex: 10,
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 22,
   },
   logoContainer: {
-    marginBottom: 18,
+    marginBottom: 14,
   },
   title: {
     fontSize: 28,
-    fontWeight: '900',
-    letterSpacing: 1,
+    fontWeight: '800',
+    letterSpacing: 0,
   },
   subtitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: 3,
-    marginTop: 4,
-  },
-  systemLabel: {
-    marginTop: 10,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '500',
+    letterSpacing: 0,
+    marginTop: 6,
   },
   formCard: {
     width: '100%',
-    maxWidth: 430,
+    maxWidth: 420,
     borderWidth: 1,
-    borderRadius: 24,
-    padding: 26,
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
+    borderRadius: 8,
+    padding: 24,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
     shadowOffset: {
       width: 0,
       height: 10,
     },
     elevation: 6,
   },
+  forgotLink: {
+    alignSelf: 'flex-end',
+    marginTop: -6,
+    marginBottom: 8,
+  },
+  forgotText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    marginBottom: 24,
+    gap: 12,
+    marginBottom: 22,
   },
   cardIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
+    width: 40,
+    height: 40,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   loginHeader: {
     fontSize: 22,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   loginSubtext: {
     fontSize: 13,
     marginTop: 4,
+    lineHeight: 18,
   },
   messageBanner: {
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 8,
     padding: 12,
     marginBottom: 16,
   },
@@ -350,7 +359,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   loginButton: {
-    marginTop: 4,
+    marginTop: 6,
   },
   divider: {
     height: 1,

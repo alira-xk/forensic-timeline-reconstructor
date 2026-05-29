@@ -3,21 +3,30 @@ const path = require('path');
 const logger = require('./logger');
 
 const EXTRACTION_TIMEOUT = parseInt(process.env.EXTRACTION_TIMEOUT) || 120000;
+const BASE_DIR = path.resolve(__dirname, '../..');
 
 const runPythonExtraction = (filePath, fileType, fileId, caseId) => {
   return new Promise((resolve, reject) => {
     const pythonPath = process.env.PYTHON_PATH || 'python';
-    const enginePath = path.resolve(process.env.PYTHON_ENGINE_PATH || './python-engine/main.py');
+    const enginePath = path.resolve(
+      BASE_DIR,
+      process.env.PYTHON_ENGINE_PATH || 'python-engine/main.py'
+    );
+    const resolvedFilePath = path.isAbsolute(filePath)
+      ? filePath
+      : path.resolve(BASE_DIR, filePath);
 
-    logger.info('Starting Python extraction', { filePath, fileType, fileId, caseId });
+    logger.info('Starting Python extraction', { filePath: resolvedFilePath, fileType, fileId, caseId });
 
     const proc = spawn(pythonPath, [
       enginePath,
-      '--file', filePath,
+      '--file', resolvedFilePath,
       '--type', fileType,
       '--file-id', fileId,
       '--case-id', caseId,
-    ]);
+    ], {
+      cwd: BASE_DIR,
+    });
 
     let stdout = '';
     let stderr = '';
@@ -47,7 +56,12 @@ const runPythonExtraction = (filePath, fileType, fileId, caseId) => {
       }
 
       try {
-        const result = JSON.parse(stdout);
+        const cleaned = stdout.trim();
+        const lastLine = cleaned.split(/\r?\n/).filter(Boolean).pop();
+        if (!lastLine) {
+          return reject(new Error('Python extraction returned no output.'));
+        }
+        const result = JSON.parse(lastLine);
         if (!result.success) {
           return reject(new Error(result.error || 'Extraction returned failure'));
         }

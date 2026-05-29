@@ -1,38 +1,103 @@
-export const API_BASE_URL = 'http://localhost:5000/api';
+import { storageGetItem, storageSetItem } from '../auth/authStorage';
 
-const SESSION_KEY = 'forensic_timeline_user';
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
 
-const getLoggedInUserId = () => {
+const SESSION_KEY = 'forensic_timeline_session';
+
+type SessionPayload = {
+  user: { _id: string };
+  accessToken: string;
+  refreshToken: string;
+};
+
+const getSessionPayload = async (): Promise<SessionPayload | null> => {
   try {
-    const storedUser = localStorage.getItem(SESSION_KEY);
-
-    if (!storedUser) {
-      return '';
+    const stored = await storageGetItem(SESSION_KEY);
+    if (!stored) {
+      return null;
     }
-
-    const user = JSON.parse(storedUser);
-    return user?._id || '';
+    return JSON.parse(stored) as SessionPayload;
   } catch {
-    return '';
+    return null;
   }
+};
+
+export const getAccessToken = async (): Promise<string | null> => {
+  const session = await getSessionPayload();
+  return session?.accessToken || null;
+};
+
+export const setSessionTokens = async (
+  user: SessionPayload['user'],
+  accessToken: string,
+  refreshToken: string
+) => {
+  await storageSetItem(
+    SESSION_KEY,
+    JSON.stringify({ user, accessToken, refreshToken })
+  );
+};
+
+const refreshAccessToken = async () => {
+  const session = await getSessionPayload();
+  if (!session?.refreshToken) {
+    return null;
+  }
+
+  const response = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken: session.refreshToken }),
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data?.data?.accessToken) {
+    return null;
+  }
+
+  await setSessionTokens(session.user, data.data.accessToken, data.data.refreshToken);
+  return data.data.accessToken as string;
 };
 
 export const apiRequest = async (
   endpoint: string,
   options: RequestInit = {}
 ) => {
-  const userId = getLoggedInUserId();
+  const session = await getSessionPayload();
+  const accessToken = session?.accessToken;
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    ...(options.headers || {}),
+  } as Record<string, string>;
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(userId ? { 'x-user-id': userId } : {}),
-      ...(options.headers || {}),
-    },
+    headers,
   });
 
   const data = await response.json();
+
+  if (response.status === 401 && data?.code === 'TOKEN_EXPIRED') {
+    const refreshedToken = await refreshAccessToken();
+    if (refreshedToken) {
+      const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers: {
+          ...headers,
+          Authorization: `Bearer ${refreshedToken}`,
+        },
+      });
+
+      const retryData = await retryResponse.json();
+      if (!retryResponse.ok) {
+        throw new Error(retryData.message || 'API request failed');
+      }
+      return retryData;
+    }
+  }
 
   if (!response.ok) {
     throw new Error(data.message || 'API request failed');

@@ -12,9 +12,10 @@ const errorHandler = require('./src/middleware/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const BASE_DIR = path.resolve(__dirname);
 
-// Create uploads directory
-const uploadDir = process.env.UPLOAD_DIR || './uploads';
+// Create uploads directory (always relative to backend root unless absolute path is provided)
+const uploadDir = path.resolve(BASE_DIR, process.env.UPLOAD_DIR || 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -45,7 +46,7 @@ app.use(morgan('combined', {
 }));
 
 // Static files for uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(uploadDir));
 
 // Routes
 app.use('/api/auth', require('./src/routes/auth.routes'));
@@ -82,13 +83,19 @@ app.use((req, res) => {
 // Global error handler
 app.use(errorHandler);
 
+const redactMongoUri = (uri = '') => uri.replace(/\/\/.*@/, '//<credentials>@');
+
 // MongoDB connection and server start
 const startServer = async () => {
   try {
+    if (!process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI is required. Set it to your MongoDB connection string.');
+    }
+
     await mongoose.connect(process.env.MONGODB_URI, {
       serverSelectionTimeoutMS: 5000,
     });
-    logger.info('Connected to MongoDB', { uri: process.env.MONGODB_URI.replace(/\/\/.*@/, '//<credentials>@') });
+    logger.info('Connected to MongoDB', { uri: redactMongoUri(process.env.MONGODB_URI) });
 
     app.listen(PORT, '0.0.0.0', () => {
       logger.info(`Server running on port ${PORT}`, { env: process.env.NODE_ENV || 'development' });
@@ -98,13 +105,16 @@ const startServer = async () => {
       console.log(`  Health:   http://localhost:${PORT}/api/health\n`);
     });
   } catch (err) {
-    logger.error('Failed to start server', { error: err.message });
-    console.error('FATAL: Could not connect to MongoDB. Is it running?');
+    logger.error('Failed to connect to MongoDB', { error: err.message });
+    console.error('FATAL: Could not connect to MongoDB.');
+    console.error('Check MONGODB_URI in forensic-backend/.env and make sure MongoDB is running.');
     console.error(err.message);
     process.exit(1);
   }
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
 
-module.exports = app;
+module.exports = { app, startServer };

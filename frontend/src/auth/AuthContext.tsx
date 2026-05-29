@@ -1,13 +1,19 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { AuthResult, AuthUser, SignUpInput, authService } from './authService';
+import {
+  AuthResult,
+  AuthUser,
+  OtpResult,
+  SignUpInput,
+  authService,
+} from './authService';
 
 type AuthContextValue = {
   user: AuthUser | null;
   isInitializing: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
   signUp: (input: SignUpInput) => Promise<AuthResult>;
-  verifyOtp: (email: string, otpCode: string) => Promise<AuthResult>;
-  resendOtp: (email: string) => Promise<{ success: boolean; message: string }>;
+  verifyOtp: (email: string, otpCode: string) => Promise<OtpResult>;
+  resendOtp: (email: string) => Promise<OtpResult>;
   signOut: () => Promise<void>;
 };
 
@@ -26,12 +32,11 @@ const AuthContext = createContext<AuthContextValue>({
   }),
   verifyOtp: async () => ({
     success: false,
-    code: 'missing_fields',
-    message: 'Email and OTP are required.',
+    message: 'OTP verification is unavailable.',
   }),
   resendOtp: async () => ({
     success: false,
-    message: 'Email is required.',
+    message: 'OTP resend is unavailable.',
   }),
   signOut: async () => {},
 });
@@ -74,24 +79,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (input: SignUpInput) => {
     const result = await authService.signUp(input);
 
-    // Signup only sends OTP. It should not login automatically.
+    if (result.success) {
+      setUser(result.user);
+    }
+
     return result;
-  };
-
-  const verifyOtp = async (email: string, otpCode: string) => {
-    const result = await authService.verifyOtp(email, otpCode);
-
-    // OTP verification only verifies account. User should login manually.
-    return result;
-  };
-
-  const resendOtp = async (email: string) => {
-    return authService.resendOtp(email);
   };
 
   const signOut = async () => {
     await authService.signOut();
     setUser(null);
+  };
+
+  const verifyOtp = async (email: string, otpCode: string) => {
+    return authService.verifyOtp(email, otpCode);
+  };
+
+  const resendOtp = async (email: string) => {
+    return authService.resendOtp(email);
   };
 
   return (

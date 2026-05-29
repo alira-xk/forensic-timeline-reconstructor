@@ -16,6 +16,8 @@ import { useAuth } from '../auth/AuthContext';
 
 import { LoginScreen } from '../screens/LoginScreen';
 import { SignUpScreen } from '../screens/SignUpScreen';
+import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
+import { ResetPasswordScreen } from '../screens/ResetPasswordScreen';
 import { OtpVerificationScreen } from '../screens/OtpVerificationScreen';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { CasesListScreen } from '../screens/CasesListScreen';
@@ -152,6 +154,8 @@ export const AppNavigator = () => {
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="SignUp" component={SignUpScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+            <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
             <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
           </>
         )}

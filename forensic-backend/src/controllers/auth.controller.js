@@ -1,7 +1,10 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const dns = require('dns').promises;
 const User = require('../models/User');
 const { successResponse, errorResponse } = require('../utils/response');
 const { logAudit, AUDIT_ACTIONS } = require('../utils/auditLogger');
+const { sendPasswordResetEmail, sendOtpEmail } = require('../utils/emailService');
 
 const generateAccessToken = (userId) => {
   return jwt.sign({ userId }, process.env.JWT_ACCESS_SECRET, {
@@ -15,37 +18,209 @@ const generateRefreshToken = (userId) => {
   });
 };
 
+const generateSixDigitCode = () => crypto.randomInt(100000, 1000000).toString();
+const generateResetToken = generateSixDigitCode;
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+const generateOtp = generateSixDigitCode;
+
+const BLOCKED_EMAIL_DOMAINS = [
+  'example.com',
+  'example.org',
+  'example.net',
+  'test.com',
+  'invalid.com',
+  'fake.com',
+  'mailinator.com',
+  'guerrillamail.com',
+  '10minutemail.com',
+  'tempmail.com',
+  'temp-mail.org',
+  'yopmail.com',
+  'trashmail.com',
+  'sharklasers.com',
+];
+
+const BLOCKED_EMAIL_LOCAL_PARTS = [
+  'a',
+  'aa',
+  'aaa',
+  'abc',
+  'abcd',
+  'admin',
+  'demo',
+  'dummy',
+  'email',
+  'fake',
+  'foo',
+  'mail',
+  'noemail',
+  'none',
+  'null',
+  'sample',
+  'test',
+  'testing',
+  'user',
+  'username',
+];
+
+const PLACEHOLDER_LOCAL_PATTERNS = [
+  /^a+b+c*$/i,
+  /^test[0-9._-]*$/i,
+  /^fake[0-9._-]*$/i,
+  /^dummy[0-9._-]*$/i,
+  /^user[0-9._-]*$/i,
+  /^example[0-9._-]*$/i,
+  /^(.)\1{2,}$/i,
+  /^(123|1234|12345|123456|qwerty|asdf|asdfgh)$/i,
+];
+
+const getAllowedDomains = () => {
+  const configured = (process.env.ALLOWED_EMAIL_DOMAINS || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  return configured;
+};
+
+const getAllowedEmailAddresses = () => {
+  return (process.env.ALLOWED_EMAIL_ADDRESSES || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+};
+
+const shouldEnforceEmailChecks = () => {
+  return (process.env.ENFORCE_EMAIL_DOMAIN_CHECKS || 'true') === 'true';
+};
+
+const hasDnsMailTarget = async (domain) => {
+  try {
+    const mx = await dns.resolveMx(domain);
+    if (mx.some((record) => record.exchange && record.exchange.trim())) {
+      return true;
+    }
+  } catch (err) {
+    // Fall through to A/AAAA checks. Some domains accept mail at their host.
+  }
+
+  try {
+    const [ipv4, ipv6] = await Promise.allSettled([dns.resolve4(domain), dns.resolve6(domain)]);
+    return (
+      (ipv4.status === 'fulfilled' && ipv4.value.length > 0) ||
+      (ipv6.status === 'fulfilled' && ipv6.value.length > 0)
+    );
+  } catch (err) {
+    return false;
+  }
+};
+
+const validateEmailForDelivery = async (email) => {
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail)) {
+    return { ok: false, email: cleanEmail, message: 'Enter a valid email address.' };
+  }
+
+  const allowedEmailAddresses = getAllowedEmailAddresses();
+  if (allowedEmailAddresses.length && !allowedEmailAddresses.includes(cleanEmail)) {
+    return { ok: false, email: cleanEmail, message: 'This email address is not approved for registration.' };
+  }
+
+  const [localPart, domain] = cleanEmail.split('@');
+  const normalizedLocalPart = localPart.replace(/[._-]/g, '');
+
+  if (
+    localPart.length < 4 ||
+    BLOCKED_EMAIL_LOCAL_PARTS.includes(localPart) ||
+    BLOCKED_EMAIL_LOCAL_PARTS.includes(normalizedLocalPart) ||
+    PLACEHOLDER_LOCAL_PATTERNS.some((pattern) => pattern.test(localPart) || pattern.test(normalizedLocalPart))
+  ) {
+    return { ok: false, email: cleanEmail, message: 'Use your real personal or work email address.' };
+  }
+
+  const allowedDomains = getAllowedDomains();
+  if (allowedDomains.length && !allowedDomains.includes(domain)) {
+    return { ok: false, email: cleanEmail, message: 'Use an approved email domain.' };
+  }
+
+  if (BLOCKED_EMAIL_DOMAINS.includes(domain)) {
+    return { ok: false, email: cleanEmail, message: 'Use a real, deliverable email address.' };
+  }
+
+  if (shouldEnforceEmailChecks()) {
+    const hasMailTarget = await hasDnsMailTarget(domain);
+    if (!hasMailTarget) {
+      return { ok: false, email: cleanEmail, message: 'Email domain cannot receive mail.' };
+    }
+  }
+
+  return { ok: true, email: cleanEmail };
+};
+
 exports.register = async (req, res, next) => {
   try {
     const { name, email, password, role, organization } = req.body;
+    const emailValidation = await validateEmailForDelivery(email);
+    if (!emailValidation.ok) {
+      return errorResponse(res, emailValidation.message, 400, 'invalid_email');
+    }
+    const cleanEmail = emailValidation.email;
 
-    const existing = await User.findOne({ email });
-    if (existing) {
-      return errorResponse(res, 'Email already registered.', 409);
+    const existing = await User.findOne({ email: cleanEmail });
+    if (existing && existing.isVerified !== false) {
+      return errorResponse(res, 'Account already exists. Please login.', 409, 'account_exists');
     }
 
-    const user = await User.create({ name, email, password, role, organization });
+    const otpCode = generateOtp();
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    const accessToken = generateAccessToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
+    let user;
+    if (existing && existing.isVerified === false) {
+      existing.name = name;
+      existing.email = cleanEmail;
+      existing.password = password;
+      existing.role = role || existing.role;
+      existing.organization = organization || existing.organization;
+      existing.otpCode = otpCode;
+      existing.otpExpiresAt = otpExpiresAt;
+      existing.isVerified = false;
+      user = await existing.save();
+    } else {
+      user = await User.create({
+        name,
+        email: cleanEmail,
+        password,
+        role,
+        organization,
+        isVerified: false,
+        otpCode,
+        otpExpiresAt,
+      });
+    }
 
-    const refreshExpiry = new Date();
-    refreshExpiry.setDate(refreshExpiry.getDate() + 30);
-
-    user.refreshTokens.push({
-      token: refreshToken,
-      expiresAt: refreshExpiry,
-    });
-    user.lastLogin = new Date();
-    await user.save();
+    try {
+      await sendOtpEmail(cleanEmail, otpCode);
+    } catch (emailErr) {
+      if (!existing) {
+        await User.findByIdAndDelete(user._id);
+      }
+      return errorResponse(
+        res,
+        'Failed to send verification code. Please try again later.',
+        502,
+        'email_send_failed'
+      );
+    }
 
     logAudit(user._id, AUDIT_ACTIONS.REGISTER, 'User', user._id.toString(), { email }, req.ip);
 
-    return successResponse(res, 'Registration successful.', {
-      user: user.toJSON(),
-      accessToken,
-      refreshToken,
-    }, 201);
+    return res.status(201).json({
+      success: true,
+      code: 'otp_sent',
+      message: 'OTP sent to your email. Please verify your account.',
+      data: { email: user.email },
+      timestamp: new Date().toISOString(),
+    });
   } catch (err) {
     next(err);
   }
@@ -54,8 +229,9 @@ exports.register = async (req, res, next) => {
 exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    const cleanEmail = email.trim().toLowerCase();
 
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email: cleanEmail }).select('+password');
     if (!user) {
       logAudit(null, AUDIT_ACTIONS.LOGIN, 'User', '', { email, reason: 'User not found' }, req.ip, false);
       return errorResponse(res, 'Invalid email or password.', 401);
@@ -63,6 +239,10 @@ exports.login = async (req, res, next) => {
 
     if (!user.isActive) {
       return errorResponse(res, 'Account is deactivated.', 401);
+    }
+
+    if (user.isVerified === false) {
+      return errorResponse(res, 'Please verify your email before login.', 403, 'account_not_verified');
     }
 
     const isMatch = await user.comparePassword(password);
@@ -226,6 +406,188 @@ exports.changePassword = async (req, res, next) => {
     logAudit(user._id, AUDIT_ACTIONS.PASSWORD_CHANGED, 'User', user._id.toString(), {}, req.ip);
 
     return successResponse(res, 'Password changed successfully.');
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return errorResponse(res, 'Email is required.', 400);
+    }
+
+    const emailValidation = await validateEmailForDelivery(email);
+    if (!emailValidation.ok) {
+      return errorResponse(res, emailValidation.message, 400, 'invalid_email');
+    }
+    const cleanEmail = emailValidation.email;
+
+    const user = await User.findOne({ email: cleanEmail });
+
+    if (!user) {
+      // Avoid leaking whether the email exists.
+      return successResponse(res, 'If the email exists, a reset token was sent.');
+    }
+
+    const resetToken = generateResetToken();
+    user.resetPasswordTokenHash = hashToken(resetToken);
+    user.resetPasswordExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    await user.save();
+
+    try {
+      await sendPasswordResetEmail(cleanEmail, resetToken);
+    } catch (error) {
+      return errorResponse(
+        res,
+        'Failed to send reset code. Please try again later.',
+        502,
+        'email_send_failed'
+      );
+    }
+
+    logAudit(user._id, AUDIT_ACTIONS.PASSWORD_RESET_REQUESTED, 'User', user._id.toString(), {}, req.ip);
+
+    const isDevLog = (process.env.DEV_EMAIL_LOG || 'false') === 'true';
+
+    return successResponse(res, 'Password reset email sent.', isDevLog ? { resetToken } : null);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.verifyOtp = async (req, res, next) => {
+  try {
+    const { email, otpCode } = req.body;
+
+    if (!email || !otpCode) {
+      return errorResponse(res, 'Email and OTP code are required.', 400, 'missing_fields');
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanOtp = otpCode.trim();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail)) {
+      return errorResponse(res, 'This is not a valid email address.', 400, 'invalid_email');
+    }
+
+    if (!/^\d{6}$/.test(cleanOtp)) {
+      return errorResponse(res, 'OTP code must be 6 digits.', 400, 'invalid_otp');
+    }
+
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      return errorResponse(res, 'Account not found. Please sign up first.', 404, 'account_not_found');
+    }
+
+    if (user.isVerified) {
+      return successResponse(res, 'Account already verified.', { user: user.toJSON() });
+    }
+
+    if (!user.otpCode || !user.otpExpiresAt) {
+      return errorResponse(res, 'OTP not found. Please request a new code.', 400, 'otp_not_found');
+    }
+
+    if (new Date() > user.otpExpiresAt) {
+      return errorResponse(res, 'OTP has expired. Please request a new code.', 400, 'otp_expired');
+    }
+
+    if (user.otpCode !== cleanOtp) {
+      return errorResponse(res, 'Invalid OTP code.', 400, 'invalid_otp');
+    }
+
+    user.isVerified = true;
+    user.otpCode = null;
+    user.otpExpiresAt = null;
+    await user.save();
+
+    return successResponse(res, 'Account verified successfully.', { user: user.toJSON() });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.resendOtp = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return errorResponse(res, 'Email is required.', 400, 'missing_email');
+    }
+
+    const emailValidation = await validateEmailForDelivery(email);
+    if (!emailValidation.ok) {
+      return errorResponse(res, emailValidation.message, 400, 'invalid_email');
+    }
+    const cleanEmail = emailValidation.email;
+
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      return errorResponse(res, 'Account not found. Please sign up first.', 404, 'account_not_found');
+    }
+
+    if (user.isVerified) {
+      return errorResponse(res, 'Account is already verified. Please login.', 400, 'already_verified');
+    }
+
+    const otpCode = generateOtp();
+    user.otpCode = otpCode;
+    user.otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    try {
+      await sendOtpEmail(cleanEmail, otpCode);
+    } catch (emailErr) {
+      return errorResponse(
+        res,
+        'Failed to send verification code. Please try again later.',
+        502,
+        'email_send_failed'
+      );
+    }
+
+    return successResponse(res, 'OTP resent successfully.');
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.resetPassword = async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return errorResponse(res, 'Token and new password are required.', 400);
+    }
+
+    if (!/^\d{6}$/.test(token.trim())) {
+      return errorResponse(res, 'Reset code must be 6 digits.', 400, 'invalid_reset_code');
+    }
+
+    if (newPassword.length < 8) {
+      return errorResponse(res, 'New password must be at least 8 characters.', 400);
+    }
+
+    const tokenHash = hashToken(token.trim());
+    const user = await User.findOne({
+      resetPasswordTokenHash: tokenHash,
+      resetPasswordExpiresAt: { $gt: new Date() },
+    }).select('+password');
+
+    if (!user) {
+      return errorResponse(res, 'Invalid or expired reset token.', 400, 'INVALID_TOKEN');
+    }
+
+    user.password = newPassword;
+    user.resetPasswordTokenHash = null;
+    user.resetPasswordExpiresAt = null;
+    user.refreshTokens = [];
+    await user.save();
+
+    logAudit(user._id, AUDIT_ACTIONS.PASSWORD_RESET_COMPLETED, 'User', user._id.toString(), {}, req.ip);
+
+    return successResponse(res, 'Password has been reset successfully.');
   } catch (err) {
     next(err);
   }

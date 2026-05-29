@@ -6,6 +6,7 @@ dist/
 build/
 uploads/
 *.log
+.mongo-data/
 
 backend/node_modules/
 frontend/node_modules/
@@ -13,4 +14,6 @@ backend/.env
 frontend/.env
 python-engine/__pycache__/
 python-engine/*.pyc
+forensic-backend/python-engine/**/__pycache__/
+forensic-backend/python-engine/**/*.pyc
 backend/exports/

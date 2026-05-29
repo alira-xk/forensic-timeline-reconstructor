@@ -25,7 +25,6 @@ import {
   Plus,
   RefreshCcw,
   Settings,
-  Shield,
   Upload,
 } from 'lucide-react-native';
 
@@ -125,11 +124,11 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
   );
 
   const totalCases = cases.length;
-  const activeCases = cases.filter((item) => item.status === 'Active').length;
+  const activeCases = cases.filter((item) => item.status === 'open').length;
   const totalEvidenceFiles = files.length;
-  const pendingFiles = files.filter((file) => file.status === 'PENDING').length;
-  const processedFiles = files.filter((file) => file.status === 'PROCESSED').length;
-  const failedFiles = files.filter((file) => file.status === 'FAILED').length;
+  const pendingFiles = files.filter((file) => file.status === 'pending').length;
+  const processedFiles = files.filter((file) => file.status === 'processed').length;
+  const failedFiles = files.filter((file) => file.status === 'failed').length;
   const totalTimelineEvents = timelineEvents.length;
 
   const latestCase = cases[0];
@@ -146,8 +145,8 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       .map((event) => ({
         id: event._id,
         title: event.eventType,
-        description: `${event.fileId?.originalName || 'Unknown file'} • ${
-          event.description || event.source || 'Timeline event recorded'
+        description: `${event.fileRecord?.originalName || 'Unknown file'} • ${
+          event.description || event.eventSource || 'Timeline event recorded'
         }`,
         time: formatTime(event.createdAt || event.timestamp),
         type: event.eventType,
@@ -187,7 +186,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
 
     if (selectedMetric === 'ACTIVE_CASES') {
       return cases
-        .filter((item) => item.status === 'Active')
+        .filter((item) => item.status === 'open')
         .map((item) => ({
           id: item._id,
           title: item.title,
@@ -201,40 +200,40 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         id: item._id,
         title: item.originalName,
         subtitle: `Type: ${item.fileType} • Status: ${item.status}`,
-        meta: `SHA-256: ${shortHash(item.hash)} • Uploaded: ${formatDate(item.createdAt)}`,
+        meta: `SHA-256: ${shortHash(item.sha256Hash)} • Uploaded: ${formatDate(item.createdAt)}`,
       }));
     }
 
     if (selectedMetric === 'PROCESSED_FILES') {
       return files
-        .filter((item) => item.status === 'PROCESSED')
+        .filter((item) => item.status === 'processed')
         .map((item) => ({
           id: item._id,
           title: item.originalName,
           subtitle: `Type: ${item.fileType} • Status: ${item.status}`,
-          meta: `SHA-256: ${shortHash(item.hash)} • Uploaded: ${formatDate(item.createdAt)}`,
+          meta: `SHA-256: ${shortHash(item.sha256Hash)} • Uploaded: ${formatDate(item.createdAt)}`,
         }));
     }
 
     if (selectedMetric === 'PENDING_FILES') {
       return files
-        .filter((item) => item.status === 'PENDING')
+        .filter((item) => item.status === 'pending')
         .map((item) => ({
           id: item._id,
           title: item.originalName,
           subtitle: `Type: ${item.fileType} • Status: ${item.status}`,
-          meta: `SHA-256: ${shortHash(item.hash)} • Uploaded: ${formatDate(item.createdAt)}`,
+          meta: `SHA-256: ${shortHash(item.sha256Hash)} • Uploaded: ${formatDate(item.createdAt)}`,
         }));
     }
 
     if (selectedMetric === 'FAILED_FILES') {
       return files
-        .filter((item) => item.status === 'FAILED')
+        .filter((item) => item.status === 'failed')
         .map((item) => ({
           id: item._id,
           title: item.originalName,
           subtitle: item.errorReason || `Type: ${item.fileType} • Status: ${item.status}`,
-          meta: `SHA-256: ${shortHash(item.hash)} • Uploaded: ${formatDate(item.createdAt)}`,
+          meta: `SHA-256: ${shortHash(item.sha256Hash)} • Uploaded: ${formatDate(item.createdAt)}`,
         }));
     }
 
@@ -244,8 +243,8 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       .map((item) => ({
         id: item._id,
         title: item.eventType,
-        subtitle: item.description || item.source || 'Timeline event recorded.',
-        meta: `File: ${item.fileId?.originalName || 'N/A'} • Time: ${formatDateTime(item.timestamp)}`,
+        subtitle: item.description || item.eventSource || 'Timeline event recorded.',
+        meta: `File: ${item.fileRecord?.originalName || 'N/A'} • Time: ${formatDateTime(item.timestamp)}`,
       }));
   }, [selectedMetric, cases, files, timelineEvents]);
 
@@ -289,19 +288,21 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
   }
 
   const getActivityColor = (type: string) => {
-    if (type.includes('FAILED')) {
+    const normalized = type.toUpperCase();
+
+    if (normalized.includes('FAILED')) {
       return theme.colors.status.error;
     }
 
-    if (type.includes('UPLOADED')) {
+    if (normalized.includes('UPLOADED')) {
       return theme.colors.status.success;
     }
 
-    if (type.includes('LOG')) {
+    if (normalized.includes('LOG')) {
       return theme.colors.status.info;
     }
 
-    if (type.includes('IMAGE')) {
+    if (normalized.includes('IMAGE')) {
       return theme.colors.primary;
     }
 
@@ -375,7 +376,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         <View style={[styles.header, { borderColor: theme.colors.border }]}>
           <View>
             <Text style={[styles.brandTitle, { color: theme.colors.text.secondary }]}>
-              FORENSIC CASE MANAGEMENT
+              Case management
             </Text>
 
             <Text style={[styles.welcome, { color: theme.colors.text.primary }]}>
@@ -413,20 +414,6 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
               </Text>
             </TouchableOpacity>
 
-            <View
-              style={[
-                styles.badge,
-                {
-                  backgroundColor: theme.colors.surfaceHighlight,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-            >
-              <Shield size={14} color={theme.colors.primary} />
-              <Text style={[styles.badgeText, { color: theme.colors.text.primary }]}>
-                INVESTIGATOR
-              </Text>
-            </View>
           </View>
         </View>
 
@@ -609,7 +596,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                   <View style={styles.summaryRow}>
                     <Upload size={16} color={theme.colors.primary} />
                     <Text style={[styles.summarySmall, { color: theme.colors.text.secondary }]}>
-                      Supported evidence: PDF, DOCX, Images, TXT, LOG
+                      Supported evidence: PDF, DOC, DOCX, Images, TXT, LOG
                     </Text>
                   </View>
                 </Card>
@@ -682,13 +669,13 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   content: {
-    padding: 24,
+    padding: 22,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 32,
+    marginBottom: 24,
     borderBottomWidth: 1,
     paddingBottom: 16,
     gap: 16,
@@ -701,14 +688,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   brandTitle: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0,
     marginBottom: 4,
   },
   welcome: {
-    fontSize: 22,
-    fontWeight: '900',
+    fontSize: 24,
+    fontWeight: '800',
   },
   emailText: {
     fontSize: 13,
@@ -720,12 +707,12 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 9999,
+    borderRadius: 6,
     borderWidth: 1,
   },
   badgeText: {
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   loadingBox: {
     minHeight: 260,
@@ -750,17 +737,17 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     alignItems: 'flex-start',
-    padding: 24,
+    padding: 18,
   },
   statIconDef: {
-    padding: 9,
-    borderRadius: 10,
-    marginBottom: 16,
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 14,
   },
   statValue: {
-    fontSize: 32,
-    fontWeight: '900',
-    letterSpacing: -1,
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: 0,
   },
   statLabel: {
     fontSize: 13,
@@ -769,7 +756,7 @@ const styles = StyleSheet.create({
   },
   selectedText: {
     fontSize: 11,
-    fontWeight: '900',
+    fontWeight: '800',
     marginTop: 10,
     textTransform: 'uppercase',
   },
@@ -786,7 +773,7 @@ const styles = StyleSheet.create({
   },
   detailTitle: {
     fontSize: 18,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   detailSubtitle: {
     fontSize: 12,
@@ -814,7 +801,7 @@ const styles = StyleSheet.create({
   },
   detailItemTitle: {
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   detailItemSubtitle: {
     fontSize: 12,

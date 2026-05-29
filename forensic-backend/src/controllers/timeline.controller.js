@@ -37,7 +37,7 @@ exports.getTimeline = async (req, res, next) => {
       .sort({ timestamp: sortOrder === 'desc' ? -1 : 1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('fileRecord', 'originalName fileType');
+      .populate('fileRecord', 'originalName fileType sha256Hash');
 
     return paginatedResponse(res, 'Timeline retrieved.', events, {
       page: parseInt(page), limit: parseInt(limit), total,

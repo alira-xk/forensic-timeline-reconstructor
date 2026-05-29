@@ -2,13 +2,18 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const { errorResponse } = require('../utils/response');
+const Case = require('../models/Case');
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+const BASE_DIR = path.resolve(__dirname, '../..');
+const UPLOAD_DIR = path.resolve(BASE_DIR, process.env.UPLOAD_DIR || 'uploads');
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 52428800; // 50MB
 
 const ALLOWED_MIMES = [
+  'application/msword', // doc
+  'application/vnd.ms-word', // doc
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
   'application/pdf',
   'image/jpeg',
@@ -25,11 +30,38 @@ const ALLOWED_MIMES = [
 
 const getFileType = (mimetype, originalname) => {
   const ext = path.extname(originalname).toLowerCase();
+  if (ext === '.doc' || mimetype === 'application/msword' || mimetype === 'application/vnd.ms-word') return 'doc';
   if (ext === '.docx' || mimetype.includes('wordprocessingml')) return 'docx';
   if (ext === '.pdf' || mimetype === 'application/pdf') return 'pdf';
   if (mimetype.startsWith('image/')) return 'image';
   if (ext === '.log' || ext === '.txt' || mimetype.startsWith('text/')) return 'log';
   return 'unknown';
+};
+
+const isSupportedFile = (file) => {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  const type = getFileType(file.mimetype || '', file.originalname || '');
+  return type !== 'unknown' || ['.log', '.txt', '.csv'].includes(ext);
+};
+
+const ensureCaseUploadAccess = async (req, res, next) => {
+  try {
+    const { caseId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(caseId)) {
+      return errorResponse(res, 'Case not found.', 404);
+    }
+
+    const caseData = await Case.findOne({ _id: caseId, investigator: req.user._id }).select('_id');
+    if (!caseData) {
+      return errorResponse(res, 'Case not found.', 404);
+    }
+
+    req.caseData = caseData;
+    next();
+  } catch (err) {
+    next(err);
+  }
 };
 
 const storage = multer.diskStorage({
@@ -46,7 +78,9 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  // Allow most file types for forensic analysis
+  if (!isSupportedFile(file)) {
+    return cb(new Error('Unsupported file type. Upload DOC, DOCX, PDF, image, TXT, LOG, or CSV evidence files.'));
+  }
   cb(null, true);
 };
 
@@ -79,8 +113,44 @@ const computeSha256 = async (req, res, next) => {
     await Promise.all(hashPromises);
     next();
   } catch (err) {
+    for (const file of req.files) {
+      try {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      } catch (cleanupErr) {
+        // Ignore cleanup failures; the hash error is the important response.
+      }
+    }
     return errorResponse(res, 'Error computing file hashes.', 500);
   }
 };
 
-module.exports = { upload, computeSha256, getFileType, UPLOAD_DIR };
+const handleUploadErrors = (err, req, res, next) => {
+  if (!err) {
+    return next();
+  }
+
+  if (req.files?.length) {
+    for (const file of req.files) {
+      try {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      } catch (cleanupErr) {
+        // Ignore cleanup failures; the upload request should still fail clearly.
+      }
+    }
+  }
+
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return errorResponse(res, `File is too large. Maximum size is ${Math.round(MAX_FILE_SIZE / 1024 / 1024)} MB.`, 413);
+    }
+    return errorResponse(res, err.message || 'File upload failed.', 400);
+  }
+
+  return errorResponse(res, err.message || 'File upload failed.', 400);
+};
+
+module.exports = { upload, computeSha256, ensureCaseUploadAccess, handleUploadErrors, getFileType, UPLOAD_DIR };

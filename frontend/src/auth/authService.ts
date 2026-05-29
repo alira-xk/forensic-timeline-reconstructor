@@ -1,11 +1,11 @@
-import { API_BASE_URL } from '../services/api';
+import { API_BASE_URL, setSessionTokens } from '../services/api';
+import { storageGetItem, storageRemoveItem } from './authStorage';
 
 export type AuthUser = {
   _id: string;
   name: string;
   email: string;
   role: string;
-  isVerified?: boolean;
   createdAt?: string;
 };
 
@@ -47,25 +47,23 @@ export type AuthResult =
       email?: string;
     };
 
-const SESSION_KEY = 'forensic_timeline_user';
-
-const saveSession = async (user: AuthUser) => {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+export type OtpResult = {
+  success: boolean;
+  message: string;
+  code?: AuthFailureCode;
+  email?: string;
 };
 
-const clearSession = async () => {
-  localStorage.removeItem(SESSION_KEY);
-};
+const SESSION_KEY = 'forensic_timeline_session';
 
 const getSession = async (): Promise<AuthUser | null> => {
   try {
-    const storedUser = localStorage.getItem(SESSION_KEY);
-
-    if (!storedUser) {
+    const stored = await storageGetItem(SESSION_KEY);
+    if (!stored) {
       return null;
     }
-
-    return JSON.parse(storedUser) as AuthUser;
+    const payload = JSON.parse(stored) as { user?: AuthUser };
+    return payload?.user || null;
   } catch {
     return null;
   }
@@ -105,11 +103,15 @@ const login = async (email: string, password: string): Promise<AuthResult> => {
       };
     }
 
-    await saveSession(data.data);
+    await setSessionTokens(
+      data.data.user,
+      data.data.accessToken,
+      data.data.refreshToken
+    );
 
     return {
       success: true,
-      user: data.data,
+      user: data.data.user,
       message: data.message || 'Login successful.',
     };
   } catch {
@@ -147,7 +149,7 @@ if (!strongPasswordRegex.test(password)) {
 }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+    const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -170,12 +172,11 @@ if (!strongPasswordRegex.test(password)) {
       };
     }
 
-    // Signup does not login user directly.
-    // It sends OTP and moves user to verification screen.
+    // Signup always returns OTP_SENT - user must verify OTP before logging in
     return {
       success: false,
       code: 'otp_sent',
-      message: data.message || 'OTP sent to your email.',
+      message: data.message || 'OTP sent to your email. Please verify your account.',
       email,
     };
   } catch {
@@ -187,7 +188,7 @@ if (!strongPasswordRegex.test(password)) {
   }
 };
 
-const verifyOtp = async (email: string, otpCode: string): Promise<AuthResult> => {
+const verifyOtp = async (email: string, otpCode: string): Promise<OtpResult> => {
   const cleanEmail = email.trim().toLowerCase();
   const cleanOtp = otpCode.trim();
 
@@ -195,7 +196,7 @@ const verifyOtp = async (email: string, otpCode: string): Promise<AuthResult> =>
     return {
       success: false,
       code: 'missing_fields',
-      message: 'Email and OTP are required.',
+      message: 'Email and OTP code are required.',
     };
   }
 
@@ -205,10 +206,7 @@ const verifyOtp = async (email: string, otpCode: string): Promise<AuthResult> =>
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        email: cleanEmail,
-        otpCode: cleanOtp,
-      }),
+      body: JSON.stringify({ email: cleanEmail, otpCode: cleanOtp }),
     });
 
     const data = await response.json();
@@ -222,13 +220,10 @@ const verifyOtp = async (email: string, otpCode: string): Promise<AuthResult> =>
       };
     }
 
-    // Important:
-    // Do NOT save session here.
-    // After OTP verification, user should go to Login page.
     return {
       success: true,
-      user: data.data,
       message: data.message || 'Account verified successfully.',
+      email: cleanEmail,
     };
   } catch {
     return {
@@ -239,36 +234,53 @@ const verifyOtp = async (email: string, otpCode: string): Promise<AuthResult> =>
   }
 };
 
-const resendOtp = async (
-  email: string
-): Promise<{ success: boolean; message: string }> => {
+const resendOtp = async (email: string): Promise<OtpResult> => {
+  const cleanEmail = email.trim().toLowerCase();
+
+  if (!cleanEmail) {
+    return {
+      success: false,
+      code: 'missing_fields',
+      message: 'Email is required.',
+    };
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/auth/resend-otp`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        email: email.trim().toLowerCase(),
-      }),
+      body: JSON.stringify({ email: cleanEmail }),
     });
 
     const data = await response.json();
 
+    if (!response.ok) {
+      return {
+        success: false,
+        code: data.code || 'otp_not_found',
+        message: data.message || 'Failed to resend OTP.',
+        email: cleanEmail,
+      };
+    }
+
     return {
-      success: response.ok,
-      message: data.message || 'OTP request completed.',
+      success: true,
+      message: data.message || 'OTP resent successfully.',
+      email: cleanEmail,
     };
   } catch {
     return {
       success: false,
+      code: 'network_error',
       message: 'Unable to connect to authentication server.',
     };
   }
 };
 
 const signOut = async () => {
-  await clearSession();
+  await storageRemoveItem(SESSION_KEY);
 };
 
 export const authService = {

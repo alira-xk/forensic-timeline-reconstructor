@@ -82,15 +82,15 @@ export const Button: React.FC<ButtonProps> = ({
 
 const styles = StyleSheet.create({
     container: {
-        height: 48,
+        minHeight: 44,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 24,
-        marginVertical: 4,
+        paddingHorizontal: 18,
+        marginVertical: 3,
     },
     text: {
         fontSize: 14,
-        fontWeight: '600',
-        letterSpacing: 0.5,
+        fontWeight: '700',
+        letterSpacing: 0,
     },
 });

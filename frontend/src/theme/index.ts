@@ -1,32 +1,29 @@
 import { Platform } from 'react-native';
 
 const palette = {
-  // Shared Colors
-  primary: '#1E3A8A',    // Deep Blue - Brand Color
-  accent: '#0EA5E9',     // Sky 500
+  primary: '#2457D6',
+  accent: '#0F9F8F',
 
-  // Light Mode Colors
   light: {
-    background: '#F8FAFC', // Slate 50
+    background: '#F5F6F8',
     surface: '#FFFFFF',
-    surfaceHighlight: '#F1F5F9', // Slate 100
-    textPrimary: '#0F172A',
-    textSecondary: '#475569',
-    textMuted: '#94A3B8',
+    surfaceHighlight: '#ECEFF3',
+    textPrimary: '#151A22',
+    textSecondary: '#515A67',
+    textMuted: '#7B8492',
     textInverse: '#FFFFFF',
-    border: '#E2E8F0',
+    border: '#D9DEE7',
   },
 
-  // Dark Mode Colors - Optimized for Low Light Analysis
   dark: {
-    background: '#0F172A', // Slate 900
-    surface: '#1E293B',    // Slate 800
-    surfaceHighlight: '#334155', // Slate 700
-    textPrimary: '#F1F5F9', // Slate 100
-    textSecondary: '#CBD5E1', // Slate 300
-    textMuted: '#64748B',    // Slate 500
+    background: '#0E1116',
+    surface: '#171C23',
+    surfaceHighlight: '#222A34',
+    textPrimary: '#F4F6F8',
+    textSecondary: '#B8C0CC',
+    textMuted: '#7F8A99',
     textInverse: '#FFFFFF',
-    border: '#334155',     // Slate 700
+    border: '#2B3440',
   },
 
   status: {
@@ -44,7 +41,7 @@ export const lightTheme = {
     surface: palette.light.surface,
     surfaceHighlight: palette.light.surfaceHighlight,
     primary: palette.primary,
-    secondary: '#334155', // Slate 700
+    secondary: '#3E4652',
     accent: palette.accent,
     text: {
       primary: palette.light.textPrimary,
@@ -59,10 +56,10 @@ export const lightTheme = {
     xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48,
   },
   borderRadius: {
-    sm: 4, md: 8, lg: 12, full: 9999,
+    sm: 4, md: 6, lg: 8, full: 9999,
   },
   typography: {
-    header: { fontSize: 24, fontWeight: '700', letterSpacing: -0.5 },
+    header: { fontSize: 24, fontWeight: '700', letterSpacing: 0 },
     subHeader: { fontSize: 18, fontWeight: '600' },
     body: { fontSize: 14, lineHeight: 20 },
     label: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -70,11 +67,11 @@ export const lightTheme = {
   },
   shadows: {
     card: {
-      shadowColor: '#64748B',
+      shadowColor: '#1F2937',
       shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 2,
-      elevation: 2,
+      shadowOpacity: 0.06,
+      shadowRadius: 5,
+      elevation: 1,
     },
     floating: {
       shadowColor: '#0F172A',
@@ -94,8 +91,9 @@ export const darkTheme = {
     background: palette.dark.background,
     surface: palette.dark.surface,
     surfaceHighlight: palette.dark.surfaceHighlight,
-    primary: '#60A5FA', // Lighter blue for dark mode visibility (Blue 400)
-    secondary: '#94A3B8', // Lighter slate for secondary actions
+    primary: '#6EA8FF',
+    secondary: '#A4ADBA',
+    accent: '#35C7B6',
     text: {
       primary: palette.dark.textPrimary,
       secondary: palette.dark.textSecondary,

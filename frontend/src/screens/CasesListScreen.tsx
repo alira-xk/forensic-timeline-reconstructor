@@ -101,15 +101,15 @@ export const CasesListScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const getStatusColor = (status: string) => {
-    if (status === 'Active') {
+    if (status === 'open' || status === 'in_progress') {
       return theme.colors.status.success;
     }
 
-    if (status === 'Pending') {
+    if (status === 'archived') {
       return theme.colors.status.warning;
     }
 
-    if (status === 'Closed') {
+    if (status === 'closed') {
       return theme.colors.text.secondary;
     }
 
@@ -142,7 +142,7 @@ export const CasesListScreen: React.FC<Props> = ({ navigation }) => {
               ]}
             >
               <Text style={[styles.statusBadgeText, { color: getStatusColor(item.status) }]}>
-                {item.status}
+                {item.status.replace('_', ' ')}
               </Text>
             </View>
           </View>
@@ -155,7 +155,7 @@ export const CasesListScreen: React.FC<Props> = ({ navigation }) => {
           </Text>
 
           <Text style={[styles.caseMeta, { color: theme.colors.text.muted }]}>
-            Case #{item._id.slice(-6).toUpperCase()} • Created: {formatDate(item.createdAt)}
+            {item.caseNumber || `Case #${item._id.slice(-6).toUpperCase()}`} - Created: {formatDate(item.createdAt)}
           </Text>
         </View>
 
@@ -177,7 +177,7 @@ export const CasesListScreen: React.FC<Props> = ({ navigation }) => {
 
             <View>
               <Text style={[styles.label, { color: theme.colors.text.secondary }]}>
-                CASE DATABASE
+                Case Database
               </Text>
               <Text style={[styles.title, { color: theme.colors.text.primary }]}>
                 All Cases
@@ -315,8 +315,8 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 18,
+    paddingTop: 22,
+    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -331,15 +331,15 @@ const styles = StyleSheet.create({
   headerIcon: {
     width: 46,
     height: 46,
-    borderRadius: 15,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   label: {
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '700',
     marginBottom: 4,
-    letterSpacing: 1,
+    letterSpacing: 0,
   },
   title: {
     fontSize: 26,
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: 6,
   },
   createButtonLarge: {
     flexDirection: 'row',
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 18,
     paddingVertical: 13,
-    borderRadius: 14,
+    borderRadius: 6,
     marginTop: 18,
   },
   createButtonText: {
@@ -396,14 +396,14 @@ const styles = StyleSheet.create({
   filterBtn: {
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
     backgroundColor: 'transparent',
   },
   filterBtnActive: {
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
   },
   refreshButton: {
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
     backgroundColor: 'transparent',
   },
@@ -434,14 +434,14 @@ const styles = StyleSheet.create({
   caseCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 16,
     paddingHorizontal: 16,
     borderWidth: 1,
   },
   caseIcon: {
     width: 42,
     height: 42,
-    borderRadius: 13,
+    borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 999,
+    borderRadius: 6,
   },
   statusBadgeText: {
     fontSize: 10,

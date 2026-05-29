@@ -6,9 +6,18 @@ const { logAudit, AUDIT_ACTIONS } = require('../utils/auditLogger');
 const { runPythonExtraction } = require('../utils/extraction');
 const logger = require('../utils/logger');
 
+const toValidDate = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const processFile = async (file, caseId, userId, ip) => {
   try {
-    await FileRecord.findByIdAndUpdate(file._id, { status: 'processing' });
+    await FileRecord.findByIdAndUpdate(file._id, {
+      status: 'processing',
+      errorReason: '',
+      eventsExtracted: 0,
+    });
 
     const result = await runPythonExtraction(
       file.filePath,
@@ -17,22 +26,35 @@ const processFile = async (file, caseId, userId, ip) => {
       caseId.toString()
     );
 
-    if (result.success && result.events && result.events.length > 0) {
-      const eventDocs = result.events.map((evt) => ({
-        case: caseId,
-        fileRecord: file._id,
-        timestamp: new Date(evt.timestamp),
-        originalTimestamp: evt.original_timestamp || evt.timestamp,
-        eventType: evt.event_type || 'custom',
-        eventSource: file.fileType === 'unknown' ? 'txt' : file.fileType,
-        title: evt.title || 'Extracted Event',
-        description: evt.description || '',
-        metadata: evt.metadata || {},
-        confidence: evt.confidence || 50,
-        tags: evt.tags || [],
-      }));
+    await Event.deleteMany({ fileRecord: file._id });
 
-      await Event.insertMany(eventDocs);
+    if (result.success && result.events && result.events.length > 0) {
+      const eventDocs = result.events
+        .map((evt) => {
+          const timestamp = toValidDate(evt.timestamp);
+          if (!timestamp) {
+            return null;
+          }
+
+          return {
+            case: caseId,
+            fileRecord: file._id,
+            timestamp,
+            originalTimestamp: evt.original_timestamp || evt.timestamp,
+            eventType: evt.event_type || 'custom',
+            eventSource: file.fileType === 'unknown' ? 'txt' : file.fileType,
+            title: evt.title || 'Extracted Event',
+            description: evt.description || '',
+            metadata: evt.metadata || {},
+            confidence: evt.confidence || 50,
+            tags: evt.tags || [],
+          };
+        })
+        .filter(Boolean);
+
+      if (eventDocs.length > 0) {
+        await Event.insertMany(eventDocs);
+      }
 
       await FileRecord.findByIdAndUpdate(file._id, {
         status: 'processed',
@@ -49,6 +71,7 @@ const processFile = async (file, caseId, userId, ip) => {
         status: 'processed',
         eventsExtracted: 0,
         extractedAt: new Date(),
+        errorReason: '',
       });
     }
   } catch (err) {

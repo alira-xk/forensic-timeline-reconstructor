@@ -25,8 +25,10 @@ import {
   FileText,
   FolderOpen,
   Hash,
+  Lock,
   RefreshCcw,
   Trash2,
+  Unlock,
   Upload,
   XCircle,
 } from 'lucide-react-native';
@@ -34,7 +36,7 @@ import {
 import { ScreenWrapper } from '../components/ScreenWrapper';
 import { useTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../types/navigation';
-import { getCaseById, CaseItem, deleteCaseById } from '../services/caseService';
+import { getCaseById, CaseItem, deleteCaseById, updateCaseById } from '../services/caseService';
 import {
   EvidenceFile,
   getFilesByCase,
@@ -45,6 +47,7 @@ import {
   getTimelineByCase,
   TimelineEvent,
 } from '../services/timelineService';
+import { confirmDialog } from '../utils/confirm';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CaseDetail'>;
 
@@ -60,13 +63,15 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const [uploading, setUploading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const totalFiles = files.length;
-  const processedFiles = files.filter((file) => file.status === 'PROCESSED').length;
-  const pendingFiles = files.filter((file) => file.status === 'PENDING').length;
-  const failedFiles = files.filter((file) => file.status === 'FAILED').length;
+  const processedFiles = files.filter((file) => file.status === 'processed').length;
+  const pendingFiles = files.filter((file) => file.status === 'pending').length;
+  const failedFiles = files.filter((file) => file.status === 'failed').length;
   const totalEvents = timelineEvents.length;
+  const isCaseClosed = caseData?.status === 'closed';
 
   const loadCaseDetails = async (showLoader = true) => {
     try {
@@ -107,6 +112,7 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
       const result = await DocumentPicker.getDocumentAsync({
         type: [
           'application/pdf',
+          'application/msword',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           'image/*',
           'text/plain',
@@ -144,8 +150,10 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
       const result = await extractMetadataForCase(caseId);
 
       Alert.alert(
-        'Extraction Complete',
-        `Files processed: ${result.extractedFiles}\nEvents created: ${result.eventsCreated}`
+        'Extraction Started',
+        result.filesQueued
+          ? `Files queued for extraction: ${result.filesQueued}`
+          : result.message || 'Extraction request sent.'
       );
 
       await loadCaseDetails(false);
@@ -172,36 +180,73 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
 };
 
 const handleDeleteCase = () => {
-  if (Platform.OS === 'web') {
-    const confirmed = window.confirm(
+  (async () => {
+    const confirmed = await confirmDialog(
+      'Delete Case',
       'Are you sure you want to delete this case? This will also delete all evidence files and timeline events.'
     );
 
-    if (confirmed) {
-      deleteCurrentCase();
-    }
-
-    return;
-  }
-
-  Alert.alert(
-    'Delete Case',
-    'Are you sure you want to delete this case? This will also delete all evidence files and timeline events.',
-    [
-      {
-        text: 'Cancel',
-        style: 'cancel',
-      },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: deleteCurrentCase,
-      },
-    ]
-  );
+    if (confirmed) deleteCurrentCase();
+  })();
 };
+
+  const updateCaseStatus = async (status: CaseItem['status']) => {
+    try {
+      setUpdatingStatus(true);
+      const updatedCase = await updateCaseById(caseId, { status });
+      setCaseData(updatedCase);
+      Alert.alert(
+        status === 'closed' ? 'Case Closed' : 'Case Reopened',
+        status === 'closed'
+          ? 'This case has been marked as closed.'
+          : 'This case has been reopened.'
+      );
+    } catch (error: any) {
+      Alert.alert('Status Update Failed', error.message || 'Failed to update case status.');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const handleToggleCaseClosed = () => {
+    const nextStatus: CaseItem['status'] = isCaseClosed ? 'open' : 'closed';
+
+    (async () => {
+      const confirmed = await confirmDialog(
+        isCaseClosed ? 'Reopen Case' : 'Close Case',
+        isCaseClosed
+          ? 'Reopen this case so evidence work can continue?'
+          : 'Close this case? You can reopen it later if more evidence arrives.'
+      );
+
+      if (confirmed) {
+        updateCaseStatus(nextStatus);
+      }
+    })();
+  };
+
   const goToTimeline = () => {
     navigation.navigate('Timeline', { caseId });
+  };
+
+  const formatCaseStatus = (status?: CaseItem['status']) => {
+    if (!status) {
+      return 'Unknown';
+    }
+
+    return status.replace('_', ' ');
+  };
+
+  const getCaseStatusColor = (status?: CaseItem['status']) => {
+    if (status === 'closed') {
+      return theme.colors.text.secondary;
+    }
+
+    if (status === 'archived') {
+      return theme.colors.status.warning;
+    }
+
+    return theme.colors.status.success;
   };
 
   const formatDate = (dateValue?: string) => {
@@ -229,15 +274,15 @@ const handleDeleteCase = () => {
   };
 
   const getStatusColor = (status: EvidenceFile['status']) => {
-    if (status === 'PROCESSED') {
+    if (status === 'processed') {
       return theme.colors.status.success;
     }
 
-    if (status === 'FAILED') {
+    if (status === 'failed') {
       return theme.colors.status.error;
     }
 
-    if (status === 'PROCESSING') {
+    if (status === 'processing') {
       return theme.colors.status.warning;
     }
 
@@ -245,15 +290,15 @@ const handleDeleteCase = () => {
   };
 
   const getStatusIcon = (status: EvidenceFile['status']) => {
-    if (status === 'PROCESSED') {
+    if (status === 'processed') {
       return <CheckCircle size={16} color={theme.colors.status.success} />;
     }
 
-    if (status === 'FAILED') {
+    if (status === 'failed') {
       return <XCircle size={16} color={theme.colors.status.error} />;
     }
 
-    if (status === 'PROCESSING') {
+    if (status === 'processing') {
       return <Clock size={16} color={theme.colors.status.warning} />;
     }
 
@@ -325,19 +370,19 @@ const handleDeleteCase = () => {
           </View>
         </View>
 
-        <Text style={[styles.fileMeta, { color: theme.colors.text.secondary }]}>
-          Type: {item.fileType} • Size: {formatBytes(item.size)} • Uploaded: {formatDate(item.createdAt)}
-        </Text>
+              <Text style={[styles.fileMeta, { color: theme.colors.text.secondary }]}>
+                Type: {item.fileType} • Size: {formatBytes(item.fileSize)} • Uploaded: {formatDate(item.createdAt)}
+              </Text>
 
-        <View style={styles.hashRow}>
-          <Hash size={13} color={theme.colors.text.muted} />
-          <Text
-            numberOfLines={1}
-            style={[styles.hashText, { color: theme.colors.text.muted }]}
-          >
-            SHA-256: {item.hash}
-          </Text>
-        </View>
+              <View style={styles.hashRow}>
+                <Hash size={13} color={theme.colors.text.muted} />
+                <Text
+                  numberOfLines={1}
+                  style={[styles.hashText, { color: theme.colors.text.muted }]}
+                >
+                  SHA-256: {item.sha256Hash}
+                </Text>
+              </View>
 
         {item.errorReason ? (
           <Text style={[styles.errorReason, { color: theme.colors.status.error }]}>
@@ -389,7 +434,7 @@ const handleDeleteCase = () => {
 
             <View style={styles.headerText}>
               <Text style={[styles.label, { color: theme.colors.text.secondary }]}>
-                CASE DETAIL
+                Case Detail
               </Text>
 
               <Text style={[styles.title, { color: theme.colors.text.primary }]}>
@@ -399,6 +444,17 @@ const handleDeleteCase = () => {
               <Text style={[styles.subtitle, { color: theme.colors.text.secondary }]}>
                 {caseData?.description || 'No description provided.'}
               </Text>
+
+              <View
+                style={[
+                  styles.caseStatusBadge,
+                  { backgroundColor: `${getCaseStatusColor(caseData?.status)}1F` },
+                ]}
+              >
+                <Text style={[styles.caseStatusText, { color: getCaseStatusColor(caseData?.status) }]}>
+                  {formatCaseStatus(caseData?.status)}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -453,7 +509,7 @@ const handleDeleteCase = () => {
                 Evidence Actions
               </Text>
               <Text style={[styles.sectionSubtitle, { color: theme.colors.text.secondary }]}>
-                Upload evidence, run metadata extraction, review timeline events, or delete this case.
+                Upload evidence, run metadata extraction, review timeline events, close, reopen, or delete this case.
               </Text>
             </View>
 
@@ -495,7 +551,7 @@ const handleDeleteCase = () => {
               <TouchableOpacity
                 style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
                 onPress={goToTimeline}
-                disabled={deleting}
+                disabled={deleting || updatingStatus}
                 activeOpacity={0.85}
               >
                 <FileText size={17} color={theme.colors.text.primary} />
@@ -505,9 +561,34 @@ const handleDeleteCase = () => {
               </TouchableOpacity>
 
               <TouchableOpacity
+                style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
+                onPress={handleToggleCaseClosed}
+                disabled={deleting || updatingStatus}
+                activeOpacity={0.85}
+              >
+                {updatingStatus ? (
+                  <ActivityIndicator color={theme.colors.primary} />
+                ) : isCaseClosed ? (
+                  <>
+                    <Unlock size={17} color={theme.colors.text.primary} />
+                    <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
+                      Reopen Case
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Lock size={17} color={theme.colors.text.primary} />
+                    <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
+                      Close Case
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={[styles.dangerButton, { borderColor: theme.colors.status.error }]}
                 onPress={handleDeleteCase}
-                disabled={deleting}
+                disabled={deleting || updatingStatus}
                 activeOpacity={0.85}
               >
                 {deleting ? (
@@ -557,7 +638,7 @@ const handleDeleteCase = () => {
                 No evidence uploaded yet
               </Text>
               <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
-                Upload a PDF, DOCX, image, TXT, or LOG file to begin timeline reconstruction.
+                Upload a PDF, DOC, DOCX, image, TXT, or LOG file to begin timeline reconstruction.
               </Text>
             </View>
           ) : (
@@ -606,7 +687,7 @@ const styles = StyleSheet.create({
   headerIcon: {
     width: 58,
     height: 58,
-    borderRadius: 18,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -629,6 +710,18 @@ const styles = StyleSheet.create({
     marginTop: 5,
     lineHeight: 20,
   },
+  caseStatusBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginTop: 10,
+  },
+  caseStatusText: {
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -645,7 +738,7 @@ const styles = StyleSheet.create({
   statIconBox: {
     width: 38,
     height: 38,
-    borderRadius: 12,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
@@ -663,7 +756,7 @@ const styles = StyleSheet.create({
   },
   actionPanel: {
     borderWidth: 1,
-    borderRadius: 22,
+    borderRadius: 8,
     padding: 20,
     marginBottom: 26,
   },
@@ -684,7 +777,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     minHeight: 46,
-    borderRadius: 14,
+    borderRadius: 6,
     paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
@@ -698,7 +791,7 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     minHeight: 46,
-    borderRadius: 14,
+    borderRadius: 6,
     paddingHorizontal: 16,
     borderWidth: 1,
     alignItems: 'center',
@@ -712,7 +805,7 @@ const styles = StyleSheet.create({
   },
   dangerButton: {
     minHeight: 46,
-    borderRadius: 14,
+    borderRadius: 6,
     paddingHorizontal: 16,
     borderWidth: 1,
     alignItems: 'center',
@@ -727,7 +820,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 46,
     height: 46,
-    borderRadius: 14,
+    borderRadius: 6,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -740,7 +833,7 @@ const styles = StyleSheet.create({
   },
   fileCard: {
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: 8,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -748,7 +841,7 @@ const styles = StyleSheet.create({
   fileIcon: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
@@ -785,7 +878,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    borderRadius: 999,
+    borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
@@ -800,7 +893,7 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     borderWidth: 1,
-    borderRadius: 20,
+    borderRadius: 8,
     padding: 28,
     alignItems: 'center',
   },

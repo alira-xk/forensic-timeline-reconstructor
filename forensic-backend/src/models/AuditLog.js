@@ -26,6 +26,8 @@ const auditLogSchema = new mongoose.Schema(
         'EXPORT_GENERATED',
         'PROFILE_UPDATED',
         'PASSWORD_CHANGED',
+        'PASSWORD_RESET_REQUESTED',
+        'PASSWORD_RESET_COMPLETED',
       ],
     },
     resource: {

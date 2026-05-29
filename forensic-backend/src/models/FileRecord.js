@@ -31,7 +31,7 @@ const fileRecordSchema = new mongoose.Schema(
     },
     fileType: {
       type: String,
-      enum: ['docx', 'pdf', 'image', 'log', 'txt', 'unknown'],
+      enum: ['doc', 'docx', 'pdf', 'image', 'log', 'txt', 'unknown'],
       default: 'unknown',
     },
     fileSize: {

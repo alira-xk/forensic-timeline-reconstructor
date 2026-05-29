@@ -151,8 +151,18 @@ export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
     setIsLoading(false);
 
     if (!result.success) {
+      if (result.code === 'otp_sent') {
+        setFormSuccess('OTP sent. Please verify your email.');
+
+        redirectTimer.current = setTimeout(() => {
+          navigation.replace('OtpVerification', { email: result.email || cleanEmail });
+        }, 800);
+
+        return;
+      }
+
       if (result.code === 'invalid_email' || result.code === 'invalid_email_domain') {
-        setFormError('This is not a valid email address.');
+        setFormError(result.message || 'This email address cannot be used for registration.');
         return;
       }
 
@@ -160,16 +170,6 @@ export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
         setFormError(
           'Password must include uppercase, lowercase, number, special character, and at least 8 characters.'
         );
-        return;
-      }
-
-      if (result.code === 'otp_sent') {
-        setFormSuccess('OTP sent to your email. Redirecting to verification...');
-
-        redirectTimer.current = setTimeout(() => {
-          navigation.navigate('OtpVerification', { email: cleanEmail });
-        }, 1000);
-
         return;
       }
 
@@ -186,6 +186,8 @@ export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
       setFormError(result.message || 'Signup failed.');
       return;
     }
+
+    setFormSuccess('Account created successfully. Redirecting...');
   };
 
   return (
@@ -222,11 +224,11 @@ export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
             </View>
 
             <Text style={[styles.title, { color: theme.colors.text.primary }]}>
-              CREATE ACCOUNT
+              Create account
             </Text>
 
             <Text style={[styles.subtitle, { color: theme.colors.text.secondary }]}>
-              Register as an investigator
+              Request access to the forensic workspace
             </Text>
           </View>
 
@@ -258,11 +260,11 @@ export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
 
               <View style={styles.cardHeaderText}>
                 <Text style={[styles.signupHeader, { color: theme.colors.text.primary }]}>
-                  Investigator Sign Up
+                  Investigator sign up
                 </Text>
 
                 <Text style={[styles.signupSubtext, { color: theme.colors.text.secondary }]}>
-                  OTP verification will be sent to your email.
+                  Create your investigator account to access the system.
                 </Text>
               </View>
             </View>
@@ -421,7 +423,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 40,
+    paddingVertical: 32,
   },
   themeToggle: {
     position: 'absolute',
@@ -430,7 +432,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -443,23 +445,23 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
-    fontSize: 27,
-    fontWeight: '900',
-    letterSpacing: 1,
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: 0,
   },
   subtitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '500',
     marginTop: 8,
   },
   formCard: {
     width: '100%',
-    maxWidth: 450,
+    maxWidth: 460,
     borderWidth: 1,
-    borderRadius: 24,
-    padding: 26,
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
+    borderRadius: 8,
+    padding: 24,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
     shadowOffset: {
       width: 0,
       height: 10,
@@ -487,15 +489,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
+    width: 40,
+    height: 40,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   signupHeader: {
     fontSize: 22,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   signupSubtext: {
     fontSize: 13,
@@ -506,7 +508,7 @@ const styles = StyleSheet.create({
     marginTop: -6,
     marginBottom: 16,
     padding: 12,
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
   },
   passwordRulesHeader: {
@@ -536,7 +538,7 @@ const styles = StyleSheet.create({
   },
   messageBanner: {
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 8,
     padding: 12,
     marginBottom: 16,
     flexDirection: 'row',

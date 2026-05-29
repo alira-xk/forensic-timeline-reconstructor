@@ -1,45 +1,49 @@
-import { API_BASE_URL, apiRequest } from './api';
+import { API_BASE_URL, apiRequest, getAccessToken } from './api';
 
 export type EvidenceFile = {
   _id: string;
-  caseId: string;
+  case: string;
   originalName: string;
   storedName: string;
   fileType: string;
   mimeType: string;
   filePath: string;
-  hash: string;
-  size: number;
-  status: 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED';
+  sha256Hash: string;
+  fileSize: number;
+  status: 'pending' | 'processing' | 'processed' | 'failed';
   errorReason?: string;
   createdAt: string;
   updatedAt: string;
 };
 
 export const getFilesByCase = async (caseId: string): Promise<EvidenceFile[]> => {
-  const response = await apiRequest(`/cases/${caseId}/files`);
-  return response.data;
+  const response = await apiRequest(`/files/case/${caseId}`);
+  return response.data || [];
 };
 
 export const uploadEvidenceFile = async (
   caseId: string,
   file: any
-): Promise<EvidenceFile> => {
+): Promise<EvidenceFile[]> => {
   const formData = new FormData();
 
   if (file.file) {
-    formData.append('evidence', file.file);
+    formData.append('files', file.file);
   } else {
-    formData.append('evidence', {
+    formData.append('files', {
       uri: file.uri,
       name: file.name || 'evidence-file',
       type: file.mimeType || 'application/octet-stream',
     } as any);
   }
 
-  const response = await fetch(`${API_BASE_URL}/cases/${caseId}/files`, {
+  const accessToken = await getAccessToken();
+  const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined;
+
+  const response = await fetch(`${API_BASE_URL}/files/upload/${caseId}`, {
     method: 'POST',
     body: formData,
+    headers,
   });
 
   const data = await response.json();
@@ -48,5 +52,5 @@ export const uploadEvidenceFile = async (
     throw new Error(data.message || 'File upload failed');
   }
 
-  return data.data;
+  return data.data?.files || [];
 };

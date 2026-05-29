@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Linking,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -33,7 +32,7 @@ import { Input } from '../components/Input';
 import { useTheme } from '../theme/ThemeContext';
 import { RootStackParamList, MainTabParamList } from '../types/navigation';
 import { getTimelineByCase, TimelineEvent } from '../services/timelineService';
-import { getExportCsvUrl, getExportJsonUrl } from '../services/exportService';
+import { exportTimelineCsv, exportTimelineJson } from '../services/exportService';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Timeline'>,
@@ -93,9 +92,10 @@ export const TimelineScreen: React.FC<Props> = ({ route }) => {
     }
 
     try {
-      await Linking.openURL(getExportJsonUrl(caseId));
-    } catch {
-      Alert.alert('Export Failed', 'Unable to export JSON file.');
+      const result = await exportTimelineJson(caseId);
+      Alert.alert('Export Ready', `${result.filename} has been downloaded.`);
+    } catch (error: any) {
+      Alert.alert('Export Failed', error.message || 'Unable to export JSON file.');
     }
   };
 
@@ -106,9 +106,10 @@ export const TimelineScreen: React.FC<Props> = ({ route }) => {
     }
 
     try {
-      await Linking.openURL(getExportCsvUrl(caseId));
-    } catch {
-      Alert.alert('Export Failed', 'Unable to export CSV file.');
+      const result = await exportTimelineCsv(caseId);
+      Alert.alert('Export Ready', `${result.filename} has been downloaded.`);
+    } catch (error: any) {
+      Alert.alert('Export Failed', error.message || 'Unable to export CSV file.');
     }
   };
 
@@ -126,11 +127,11 @@ export const TimelineScreen: React.FC<Props> = ({ route }) => {
       const searchableText = [
         event.eventType,
         event.description,
-        event.source,
-        event.rawTimestamp,
-        event.fileId?.originalName,
-        event.fileId?.fileType,
-        event.fileId?.hash,
+        event.eventSource,
+        event.originalTimestamp,
+        event.fileRecord?.originalName,
+        event.fileRecord?.fileType,
+        event.fileRecord?.sha256Hash,
       ]
         .filter(Boolean)
         .join(' ')
@@ -167,23 +168,25 @@ export const TimelineScreen: React.FC<Props> = ({ route }) => {
   };
 
   const getEventColor = (eventType: string) => {
-    if (eventType.includes('FAILED')) {
+    const normalized = eventType.toUpperCase();
+
+    if (normalized.includes('FAILED')) {
       return theme.colors.status.error;
     }
 
-    if (eventType.includes('LOG')) {
+    if (normalized.includes('LOG')) {
       return theme.colors.status.info;
     }
 
-    if (eventType.includes('IMAGE')) {
+    if (normalized.includes('IMAGE')) {
       return theme.colors.primary;
     }
 
-    if (eventType.includes('DOCX') || eventType.includes('PDF')) {
+    if (normalized.includes('DOC') || normalized.includes('PDF')) {
       return theme.colors.status.warning;
     }
 
-    if (eventType.includes('UPLOADED')) {
+    if (normalized.includes('UPLOADED')) {
       return theme.colors.status.success;
     }
 
@@ -192,16 +195,17 @@ export const TimelineScreen: React.FC<Props> = ({ route }) => {
 
   const getEventIcon = (eventType: string) => {
     const color = getEventColor(eventType);
+    const normalized = eventType.toUpperCase();
 
-    if (eventType.includes('IMAGE')) {
+    if (normalized.includes('IMAGE')) {
       return <Image size={17} color={color} />;
     }
 
-    if (eventType.includes('UPLOADED')) {
+    if (normalized.includes('UPLOADED')) {
       return <Upload size={17} color={color} />;
     }
 
-    if (eventType.includes('LOG')) {
+    if (normalized.includes('LOG')) {
       return <CalendarClock size={17} color={color} />;
     }
 
@@ -255,7 +259,7 @@ export const TimelineScreen: React.FC<Props> = ({ route }) => {
 
             <View style={[styles.typeBadge, { backgroundColor: `${color}20` }]}>
               <Text style={[styles.typeBadgeText, { color }]}>
-                {item.fileId?.fileType || 'EVENT'}
+                {item.fileRecord?.fileType || 'EVENT'}
               </Text>
             </View>
           </View>
@@ -266,26 +270,26 @@ export const TimelineScreen: React.FC<Props> = ({ route }) => {
 
           <View style={styles.metaBlock}>
             <Text style={[styles.metaText, { color: theme.colors.text.secondary }]}>
-              File: {item.fileId?.originalName || 'N/A'}
+              File: {item.fileRecord?.originalName || 'N/A'}
             </Text>
 
             <Text style={[styles.metaText, { color: theme.colors.text.secondary }]}>
-              Source: {item.source || 'N/A'}
+              Source: {item.eventSource || 'N/A'}
             </Text>
 
             <Text style={[styles.metaText, { color: theme.colors.text.secondary }]}>
-              Raw Timestamp: {item.rawTimestamp || 'N/A'}
+              Raw Timestamp: {item.originalTimestamp || 'N/A'}
             </Text>
           </View>
 
-          {item.fileId?.hash ? (
+          {item.fileRecord?.sha256Hash ? (
             <View style={styles.hashRow}>
               <Hash size={13} color={theme.colors.text.muted} />
               <Text
                 numberOfLines={1}
                 style={[styles.hashText, { color: theme.colors.text.muted }]}
               >
-                SHA-256: {item.fileId.hash}
+                SHA-256: {item.fileRecord.sha256Hash}
               </Text>
             </View>
           ) : null}

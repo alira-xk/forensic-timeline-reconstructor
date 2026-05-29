@@ -153,7 +153,9 @@ exports.deleteCase = async (req, res, next) => {
     await FileRecord.deleteMany({ case: caseData._id });
 
     // Delete case upload directory
-    const uploadDir = path.join(process.env.UPLOAD_DIR || './uploads', caseData._id.toString());
+    const baseDir = path.resolve(__dirname, '../..');
+    const uploadRoot = path.resolve(baseDir, process.env.UPLOAD_DIR || 'uploads');
+    const uploadDir = path.join(uploadRoot, caseData._id.toString());
     try {
       if (fs.existsSync(uploadDir)) {
         fs.rmSync(uploadDir, { recursive: true, force: true });

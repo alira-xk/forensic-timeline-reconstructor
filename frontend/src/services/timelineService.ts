@@ -2,17 +2,17 @@ import { apiRequest } from './api';
 
 export type TimelineEvent = {
   _id: string;
-  caseId: string;
-  fileId?: {
+  case: string;
+  fileRecord?: {
     _id: string;
     originalName: string;
     fileType: string;
-    hash: string;
+    sha256Hash: string;
   };
   eventType: string;
   timestamp: string;
-  rawTimestamp: string;
-  source: string;
+  originalTimestamp: string;
+  eventSource: string;
   description: string;
   createdAt: string;
   updatedAt: string;
@@ -21,6 +21,6 @@ export type TimelineEvent = {
 export const getTimelineByCase = async (
   caseId: string
 ): Promise<TimelineEvent[]> => {
-  const response = await apiRequest(`/cases/${caseId}/timeline`);
-  return response.data;
+  const response = await apiRequest(`/timeline/case/${caseId}`);
+  return response.data || [];
 };
