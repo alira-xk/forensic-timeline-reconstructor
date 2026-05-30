@@ -64,6 +64,10 @@ const processFile = async (file, caseId, userId, ip) => {
       });
 
       logAudit(userId, AUDIT_ACTIONS.EXTRACTION_COMPLETED, 'FileRecord', file._id.toString(), {
+        caseId: caseId.toString(),
+        fileId: file._id.toString(),
+        originalName: file.originalName,
+        sha256Hash: file.sha256Hash,
         eventsExtracted: eventDocs.length,
       }, ip);
     } else {
@@ -86,6 +90,10 @@ const processFile = async (file, caseId, userId, ip) => {
     });
 
     logAudit(userId, AUDIT_ACTIONS.EXTRACTION_FAILED, 'FileRecord', file._id.toString(), {
+      caseId: caseId.toString(),
+      fileId: file._id.toString(),
+      originalName: file.originalName,
+      sha256Hash: file.sha256Hash,
       error: err.message,
     }, ip, false);
   }
@@ -125,7 +133,13 @@ exports.extractCase = async (req, res, next) => {
     }
 
     logAudit(req.user._id, AUDIT_ACTIONS.EXTRACTION_STARTED, 'Case', caseId, {
+      caseId,
       fileCount: pendingFiles.length,
+      files: pendingFiles.map((file) => ({
+        fileId: file._id.toString(),
+        originalName: file.originalName,
+        sha256Hash: file.sha256Hash,
+      })),
     }, req.ip);
 
     // Respond immediately
@@ -163,6 +177,14 @@ exports.extractFile = async (req, res, next) => {
 
     // Delete old events for re-extraction
     await Event.deleteMany({ fileRecord: file._id });
+
+    logAudit(req.user._id, AUDIT_ACTIONS.EXTRACTION_STARTED, 'FileRecord', file._id.toString(), {
+      caseId: file.case.toString(),
+      fileId: file._id.toString(),
+      originalName: file.originalName,
+      sha256Hash: file.sha256Hash,
+      fileCount: 1,
+    }, req.ip);
 
     // Respond immediately
     successResponse(res, 'Re-extraction started.', { status: 'processing' });

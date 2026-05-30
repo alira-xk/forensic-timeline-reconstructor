@@ -5,4 +5,6 @@ const router = express.Router();
 router.use(authenticate);
 router.get('/json/:caseId', ec.exportJSON);
 router.get('/csv/:caseId', ec.exportCSV);
+router.get('/report/html/:caseId', ec.exportCaseReportHTML);
+router.get('/report/pdf/:caseId', ec.exportCaseReportPDF);
 module.exports = router;

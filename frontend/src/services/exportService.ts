@@ -11,6 +11,7 @@ export const getExportCsvUrl = (caseId: string) => {
 };
 
 type ExportFormat = 'json' | 'csv';
+type DownloadFormat = ExportFormat | 'html';
 
 const getFilenameFromHeaders = (headers: Headers, fallback: string) => {
   const disposition = headers.get('content-disposition') || '';
@@ -39,15 +40,27 @@ const saveOnNative = async (content: string, filename: string) => {
 };
 
 export const exportTimeline = async (caseId: string, format: ExportFormat) => {
-  const accessToken = await getAccessToken();
-  if (!accessToken) {
-    throw new Error('You must be logged in to export files.');
-  }
-
   const endpoint =
     format === 'json'
       ? getExportJsonUrl(caseId)
       : getExportCsvUrl(caseId);
+
+  return downloadAuthenticatedFile(
+    endpoint,
+    format,
+    `timeline_export_${Date.now()}.${format}`
+  );
+};
+
+const downloadAuthenticatedFile = async (
+  endpoint: string,
+  format: DownloadFormat,
+  fallbackFilename: string
+) => {
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    throw new Error('You must be logged in to export files.');
+  }
 
   const response = await fetch(endpoint, {
     headers: {
@@ -66,10 +79,15 @@ export const exportTimeline = async (caseId: string, format: ExportFormat) => {
     }
   }
 
-  const mimeType = format === 'json' ? 'application/json' : 'text/csv';
+  const mimeType =
+    format === 'json'
+      ? 'application/json'
+      : format === 'csv'
+        ? 'text/csv'
+        : 'text/html';
   const filename = getFilenameFromHeaders(
     response.headers,
-    `timeline_export_${Date.now()}.${format}`
+    fallbackFilename
   );
 
   if (Platform.OS === 'web') {
@@ -83,3 +101,62 @@ export const exportTimeline = async (caseId: string, format: ExportFormat) => {
 
 export const exportTimelineJson = (caseId: string) => exportTimeline(caseId, 'json');
 export const exportTimelineCsv = (caseId: string) => exportTimeline(caseId, 'csv');
+
+export const exportCaseReportHtml = (caseId: string) =>
+  downloadAuthenticatedFile(
+    `${API_BASE_URL}/export/report/html/${caseId}`,
+    'html',
+    `case_report_${Date.now()}.html`
+  );
+
+export const exportCaseReportPdf = async (caseId: string) => {
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    throw new Error('You must be logged in to export files.');
+  }
+
+  const endpoint = `${API_BASE_URL}/export/report/pdf/${caseId}`;
+  const fallbackFilename = `case_report_${Date.now()}.pdf`;
+
+  if (Platform.OS !== 'web') {
+    const fileUri = `${FileSystem.documentDirectory}${fallbackFilename}`;
+    const result = await FileSystem.downloadAsync(endpoint, fileUri, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (result.status < 200 || result.status >= 300) {
+      throw new Error('Report export failed.');
+    }
+
+    return { filename: fallbackFilename, fileUri: result.uri };
+  }
+
+  const response = await fetch(endpoint, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const content = await response.text();
+    try {
+      const errorData = JSON.parse(content);
+      throw new Error(errorData.message || 'Report export failed.');
+    } catch (error: any) {
+      throw new Error(error.message || 'Report export failed.');
+    }
+  }
+
+  const filename = getFilenameFromHeaders(response.headers, fallbackFilename);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+
+  return { filename };
+};

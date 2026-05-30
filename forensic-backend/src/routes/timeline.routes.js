@@ -4,6 +4,7 @@ const tc = require('../controllers/timeline.controller');
 const router = express.Router();
 router.use(authenticate);
 router.get('/case/:caseId', tc.getTimeline);
+router.get('/graph/:caseId', tc.getRelationshipGraph);
 router.get('/summary/:caseId', tc.getTimelineSummary);
 router.get('/filters/:caseId', tc.getFilterOptions);
 router.put('/bookmark/:eventId', tc.toggleBookmark);

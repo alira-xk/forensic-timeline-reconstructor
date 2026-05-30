@@ -56,6 +56,8 @@ app.use('/api/extraction', require('./src/routes/extraction.routes'));
 app.use('/api/timeline', require('./src/routes/timeline.routes'));
 app.use('/api/export', require('./src/routes/export.routes'));
 app.use('/api/dashboard', require('./src/routes/dashboard.routes'));
+app.use('/api/notes', require('./src/routes/note.routes'));
+app.use('/api/ai', require('./src/routes/ai.routes'));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -85,6 +87,25 @@ app.use(errorHandler);
 
 const redactMongoUri = (uri = '') => uri.replace(/\/\/.*@/, '//<credentials>@');
 
+const removeLegacyAuditTtlIndex = async () => {
+  try {
+    const collection = mongoose.connection.collection('auditlogs');
+    const indexes = await collection.indexes();
+    const legacyTtlIndex = indexes.find(
+      (index) => index.key?.createdAt === 1 && index.expireAfterSeconds
+    );
+
+    if (legacyTtlIndex) {
+      await collection.dropIndex(legacyTtlIndex.name);
+      logger.info('Removed legacy audit log TTL index', { index: legacyTtlIndex.name });
+    }
+  } catch (err) {
+    if (err.codeName !== 'NamespaceNotFound') {
+      logger.warn('Could not remove legacy audit log TTL index', { error: err.message });
+    }
+  }
+};
+
 // MongoDB connection and server start
 const startServer = async () => {
   try {
@@ -96,6 +117,7 @@ const startServer = async () => {
       serverSelectionTimeoutMS: 5000,
     });
     logger.info('Connected to MongoDB', { uri: redactMongoUri(process.env.MONGODB_URI) });
+    await removeLegacyAuditTtlIndex();
 
     app.listen(PORT, '0.0.0.0', () => {
       logger.info(`Server running on port ${PORT}`, { env: process.env.NODE_ENV || 'development' });

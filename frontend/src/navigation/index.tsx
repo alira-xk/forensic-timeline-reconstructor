@@ -24,6 +24,7 @@ import { CasesListScreen } from '../screens/CasesListScreen';
 import { CreateCaseScreen } from '../screens/CreateCaseScreen';
 import { CaseDetailScreen } from '../screens/CaseDetailScreen';
 import { TimelineScreen } from '../screens/TimelineScreen';
+import { EvidenceGraphScreen } from '../screens/EvidenceGraphScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -140,6 +141,7 @@ export const AppNavigator = () => {
             <Stack.Screen name="CaseDetail" component={CaseDetailScreen} />
 
             <Stack.Screen name="Timeline" component={TimelineScreen} />
+            <Stack.Screen name="EvidenceGraph" component={EvidenceGraphScreen} />
 
             <Stack.Screen
               name="Settings"

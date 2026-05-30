@@ -11,6 +11,7 @@ export type RootStackParamList = {
   Settings: undefined;
   CaseDetail: { caseId: string };
   Timeline: { caseId?: string };
+  EvidenceGraph: { caseId: string };
 };
 
 export type MainTabParamList = {

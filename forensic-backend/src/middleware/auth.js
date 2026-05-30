@@ -5,11 +5,13 @@ const { errorResponse } = require('../utils/response');
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const queryToken = typeof req.query.token === 'string' ? req.query.token : '';
+
+    if ((!authHeader || !authHeader.startsWith('Bearer ')) && !queryToken) {
       return errorResponse(res, 'Access denied. No token provided.', 401, 'INVALID_TOKEN');
     }
 
-    const token = authHeader.split(' ')[1];
+    const token = queryToken || authHeader.split(' ')[1];
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);

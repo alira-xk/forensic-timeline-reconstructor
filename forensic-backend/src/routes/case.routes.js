@@ -9,6 +9,7 @@ router.use(authenticate);
 router.post('/', caseController.createCase);
 router.get('/', caseController.getCases);
 router.get('/:id/stats', caseController.getCaseStats);
+router.get('/:id/chain-of-custody', caseController.getChainOfCustody);
 router.get('/:id', caseController.getCaseById);
 router.put('/:id', caseController.updateCase);
 router.delete('/:id', caseController.deleteCase);

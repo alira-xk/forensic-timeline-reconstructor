@@ -3,11 +3,14 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Platform,
+  Image,
+  Linking,
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -18,15 +21,26 @@ import {
   ArrowLeft,
   AlertTriangle,
   BarChart3,
+  Bot,
   CheckCircle,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Cpu,
+  Download,
   File,
+  FileOutput,
   FileText,
   FolderOpen,
   Hash,
+  History,
   Lock,
+  MessageSquare,
+  Network,
+  Plus,
   RefreshCcw,
+  ShieldCheck,
+  Star,
   Trash2,
   Unlock,
   Upload,
@@ -36,17 +50,40 @@ import {
 import { ScreenWrapper } from '../components/ScreenWrapper';
 import { useTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../types/navigation';
-import { getCaseById, CaseItem, deleteCaseById, updateCaseById } from '../services/caseService';
+import {
+  getCaseById,
+  CaseItem,
+  ChainOfCustodyEntry,
+  deleteCaseById,
+  getChainOfCustody,
+  updateCaseById,
+} from '../services/caseService';
 import {
   EvidenceFile,
+  getFileDownloadUrl,
+  getFilePreviewUrl,
   getFilesByCase,
-  uploadEvidenceFile,
+  getTextFilePreview,
+  uploadEvidenceFiles,
 } from '../services/fileService';
 import { extractMetadataForCase } from '../services/extractionService';
 import {
   getTimelineByCase,
   TimelineEvent,
+  toggleTimelineBookmark,
 } from '../services/timelineService';
+import {
+  createInvestigationNote,
+  deleteInvestigationNote,
+  FindingType,
+  getNotesByCase,
+  InvestigationNote,
+} from '../services/noteService';
+import { exportCaseReportPdf } from '../services/exportService';
+import {
+  AiCaseAnalysis,
+  generateAiCaseSummary,
+} from '../services/aiService';
 import { confirmDialog } from '../utils/confirm';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CaseDetail'>;
@@ -58,13 +95,34 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const [caseData, setCaseData] = useState<CaseItem | null>(null);
   const [files, setFiles] = useState<EvidenceFile[]>([]);
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  const [custodyEntries, setCustodyEntries] = useState<ChainOfCustodyEntry[]>([]);
+  const [notes, setNotes] = useState<InvestigationNote[]>([]);
+  const [aiAnalysis, setAiAnalysis] = useState<AiCaseAnalysis | null>(null);
+  const [aiGeneratedAt, setAiGeneratedAt] = useState('');
+  const [aiModel, setAiModel] = useState('');
+  const [aiProvider, setAiProvider] = useState('');
+  const [aiError, setAiError] = useState('');
+  const [noteText, setNoteText] = useState('');
+  const [selectedFindingType, setSelectedFindingType] = useState<FindingType>('general');
+  const [selectedFile, setSelectedFile] = useState<EvidenceFile | null>(null);
+  const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState('');
+  const [selectedFileTextPreview, setSelectedFileTextPreview] = useState('');
+  const [selectedFileNoteText, setSelectedFileNoteText] = useState('');
+  const [loadingFilePreview, setLoadingFilePreview] = useState(false);
+  const [creatingFileNote, setCreatingFileNote] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [creatingNote, setCreatingNote] = useState(false);
+  const [buildingReport, setBuildingReport] = useState(false);
+  const [generatingAiSummary, setGeneratingAiSummary] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [isCustodyOpen, setIsCustodyOpen] = useState(false);
+  const [isNotesOpen, setIsNotesOpen] = useState(false);
+  const [isAiOpen, setIsAiOpen] = useState(false);
 
   const totalFiles = files.length;
   const processedFiles = files.filter((file) => file.status === 'processed').length;
@@ -72,6 +130,21 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const failedFiles = files.filter((file) => file.status === 'failed').length;
   const totalEvents = timelineEvents.length;
   const isCaseClosed = caseData?.status === 'closed';
+  const bookmarkedEvents = timelineEvents.filter((event) => event.isBookmarked);
+  const selectedFileEvents = selectedFile
+    ? timelineEvents.filter((event) => event.fileRecord?._id === selectedFile._id)
+    : [];
+  const selectedFileNotes = selectedFile
+    ? notes.filter((note) => note.fileRecord?._id === selectedFile._id)
+    : [];
+  const findingOptions: Array<{ value: FindingType; label: string }> = [
+    { value: 'general', label: 'General' },
+    { value: 'suspicious', label: 'Suspicious' },
+    { value: 'needs_review', label: 'Needs Review' },
+    { value: 'confirmed', label: 'Confirmed' },
+    { value: 'contradiction', label: 'Contradiction' },
+    { value: 'report', label: 'Report' },
+  ];
 
   const loadCaseDetails = async (showLoader = true) => {
     try {
@@ -79,15 +152,19 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
         setLoading(true);
       }
 
-      const [caseInfo, evidenceFiles, timelineData] = await Promise.all([
+      const [caseInfo, evidenceFiles, timelineData, custodyData, noteData] = await Promise.all([
         getCaseById(caseId),
         getFilesByCase(caseId),
         getTimelineByCase(caseId),
+        getChainOfCustody(caseId),
+        getNotesByCase(caseId),
       ]);
 
       setCaseData(caseInfo);
       setFiles(evidenceFiles);
       setTimelineEvents(timelineData);
+      setCustodyEntries(custodyData);
+      setNotes(noteData);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load case details.');
     } finally {
@@ -118,7 +195,7 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
           'text/plain',
         ],
         copyToCacheDirectory: true,
-        multiple: false,
+        multiple: true,
       });
 
       if (result.canceled || !result.assets || result.assets.length === 0) {
@@ -127,9 +204,10 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
 
       setUploading(true);
 
-      await uploadEvidenceFile(caseId, result.assets[0]);
+      await uploadEvidenceFiles(caseId, result.assets);
 
-      Alert.alert('Success', 'Evidence file uploaded successfully.');
+      const count = result.assets.length;
+      Alert.alert('Success', `${count} evidence file${count > 1 ? 's' : ''} uploaded successfully.`);
       await loadCaseDetails(false);
     } catch (error: any) {
       Alert.alert('Upload Failed', error.message || 'Failed to upload evidence file.');
@@ -225,8 +303,176 @@ const handleDeleteCase = () => {
     })();
   };
 
+  const handleCreateNote = async () => {
+    const body = noteText.trim();
+    if (!body) {
+      Alert.alert('Note Required', 'Write a note before adding it to the case.');
+      return;
+    }
+
+    try {
+      setCreatingNote(true);
+      const note = await createInvestigationNote({
+        caseId,
+        body,
+        findingType: selectedFindingType,
+        tags: selectedFindingType === 'general' ? [] : [selectedFindingType],
+      });
+      setNotes((currentNotes) => [note, ...currentNotes]);
+      setNoteText('');
+    } catch (error: any) {
+      Alert.alert('Note Failed', error.message || 'Failed to add investigation note.');
+    } finally {
+      setCreatingNote(false);
+    }
+  };
+
+  const handleBuildReport = async () => {
+    try {
+      setBuildingReport(true);
+      const result = await exportCaseReportPdf(caseId);
+      Alert.alert(
+        'Report Ready',
+        result.fileUri
+          ? `${result.filename} has been saved.`
+          : `${result.filename} has been downloaded.`
+      );
+    } catch (error: any) {
+      Alert.alert('Report Failed', error.message || 'Failed to build case report.');
+    } finally {
+      setBuildingReport(false);
+    }
+  };
+
+  const handleGenerateAiSummary = async () => {
+    try {
+      setGeneratingAiSummary(true);
+      setIsAiOpen(true);
+      setAiError('');
+      const result = await generateAiCaseSummary(caseId);
+      setAiAnalysis(result.analysis);
+      setAiGeneratedAt(result.generatedAt);
+      setAiModel(result.model);
+      setAiProvider(result.provider || '');
+    } catch (error: any) {
+      const message = error.message || 'Failed to generate AI case summary.';
+      setAiError(message);
+      Alert.alert('AI Summary Failed', message);
+    } finally {
+      setGeneratingAiSummary(false);
+    }
+  };
+
+  const handleDeleteNote = (noteId: string) => {
+    (async () => {
+      const confirmed = await confirmDialog(
+        'Delete Note',
+        'Delete this investigation note?'
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        await deleteInvestigationNote(noteId);
+        setNotes((currentNotes) => currentNotes.filter((note) => note._id !== noteId));
+      } catch (error: any) {
+        Alert.alert('Delete Failed', error.message || 'Failed to delete note.');
+      }
+    })();
+  };
+
+  const handleToggleBookmarkFromCase = async (eventId: string) => {
+    try {
+      const updatedEvent = await toggleTimelineBookmark(eventId);
+      setTimelineEvents((currentEvents) =>
+        currentEvents.map((event) =>
+          event._id === eventId
+            ? { ...event, isBookmarked: updatedEvent.isBookmarked }
+            : event
+        )
+      );
+    } catch (error: any) {
+      Alert.alert('Bookmark Failed', error.message || 'Could not update bookmark.');
+    }
+  };
+
+  const handleOpenFileDetail = async (file: EvidenceFile) => {
+    setSelectedFile(file);
+    setSelectedFilePreviewUrl('');
+    setSelectedFileTextPreview('');
+    setSelectedFileNoteText('');
+
+    if (!['image', 'pdf', 'log', 'txt'].includes(file.fileType)) {
+      return;
+    }
+
+    try {
+      setLoadingFilePreview(true);
+      if (file.fileType === 'log' || file.fileType === 'txt') {
+        const text = await getTextFilePreview(file._id);
+        setSelectedFileTextPreview(text.slice(0, 12000));
+        return;
+      }
+
+      const url = await getFilePreviewUrl(file._id);
+      setSelectedFilePreviewUrl(url);
+    } catch (error: any) {
+      Alert.alert('Preview Failed', error.message || 'Could not load file preview.');
+    } finally {
+      setLoadingFilePreview(false);
+    }
+  };
+
+  const handleDownloadSelectedFile = async () => {
+    if (!selectedFile) {
+      return;
+    }
+
+    try {
+      const url = await getFileDownloadUrl(selectedFile._id);
+      await Linking.openURL(url);
+    } catch (error: any) {
+      Alert.alert('Download Failed', error.message || 'Could not open file download.');
+    }
+  };
+
+  const handleCreateSelectedFileNote = async () => {
+    if (!selectedFile) {
+      return;
+    }
+
+    const body = selectedFileNoteText.trim();
+    if (!body) {
+      Alert.alert('Note Required', 'Write a note before adding it to this file.');
+      return;
+    }
+
+    try {
+      setCreatingFileNote(true);
+      const note = await createInvestigationNote({
+        caseId,
+        fileRecord: selectedFile._id,
+        body,
+        findingType: 'needs_review',
+        tags: ['file-note'],
+      });
+      setNotes((currentNotes) => [note, ...currentNotes]);
+      setSelectedFileNoteText('');
+    } catch (error: any) {
+      Alert.alert('Note Failed', error.message || 'Failed to add file note.');
+    } finally {
+      setCreatingFileNote(false);
+    }
+  };
+
   const goToTimeline = () => {
     navigation.navigate('Timeline', { caseId });
+  };
+
+  const goToRelationshipGraph = () => {
+    navigation.navigate('EvidenceGraph', { caseId });
   };
 
   const formatCaseStatus = (status?: CaseItem['status']) => {
@@ -255,6 +501,14 @@ const handleDeleteCase = () => {
     }
 
     return new Date(dateValue).toLocaleDateString();
+  };
+
+  const formatDateTime = (dateValue?: string) => {
+    if (!dateValue) {
+      return 'N/A';
+    }
+
+    return new Date(dateValue).toLocaleString();
   };
 
   const formatBytes = (bytes: number) => {
@@ -335,7 +589,7 @@ const handleDeleteCase = () => {
   );
 
   const renderFile = ({ item }: { item: EvidenceFile }) => (
-    <View
+    <TouchableOpacity
       style={[
         styles.fileCard,
         {
@@ -343,6 +597,8 @@ const handleDeleteCase = () => {
           borderColor: theme.colors.border,
         },
       ]}
+      onPress={() => handleOpenFileDetail(item)}
+      activeOpacity={0.85}
     >
       <View style={[styles.fileIcon, { backgroundColor: theme.colors.surfaceHighlight }]}>
         <File size={22} color={theme.colors.primary} />
@@ -390,8 +646,165 @@ const handleDeleteCase = () => {
           </Text>
         ) : null}
       </View>
+    </TouchableOpacity>
+  );
+
+  const renderCustodyEntry = ({ item }: { item: ChainOfCustodyEntry }) => {
+    const hash =
+      item.details?.sha256Hash ||
+      item.details?.files?.find((file) => file.sha256Hash)?.sha256Hash ||
+      '';
+
+    return (
+      <View style={styles.custodyRow}>
+        <View
+          style={[
+            styles.custodyMarker,
+            {
+              backgroundColor: item.success
+                ? `${theme.colors.status.success}22`
+                : `${theme.colors.status.error}22`,
+              borderColor: item.success
+                ? theme.colors.status.success
+                : theme.colors.status.error,
+            },
+          ]}
+        >
+          <ShieldCheck
+            size={15}
+            color={item.success ? theme.colors.status.success : theme.colors.status.error}
+          />
+        </View>
+
+        <View
+          style={[
+            styles.custodyCard,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <View style={styles.custodyTitleRow}>
+            <View style={styles.custodyTitleGroup}>
+              <Text style={[styles.custodyLabel, { color: theme.colors.text.primary }]}>
+                {item.label}
+              </Text>
+              <Text style={[styles.custodyTime, { color: theme.colors.text.secondary }]}>
+                {formatDateTime(item.createdAt)}
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.custodyStatusBadge,
+                {
+                  backgroundColor: item.success
+                    ? `${theme.colors.status.success}1F`
+                    : `${theme.colors.status.error}1F`,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.custodyStatusText,
+                  {
+                    color: item.success
+                      ? theme.colors.status.success
+                      : theme.colors.status.error,
+                  },
+                ]}
+              >
+                {item.success ? 'Verified' : 'Failed'}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={[styles.custodySummary, { color: theme.colors.text.secondary }]}>
+            {item.summary}
+          </Text>
+
+          <View style={styles.custodyMetaGrid}>
+            <Text style={[styles.custodyMeta, { color: theme.colors.text.muted }]}>
+              Actor: {item.actor?.name || item.actor?.email || 'System'}
+            </Text>
+
+            {item.fileName ? (
+              <Text style={[styles.custodyMeta, { color: theme.colors.text.muted }]}>
+                File: {item.fileName}
+              </Text>
+            ) : null}
+
+            {hash ? (
+              <Text
+                numberOfLines={1}
+                style={[styles.custodyHash, { color: theme.colors.text.muted }]}
+              >
+                SHA-256: {hash}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderNote = ({ item }: { item: InvestigationNote }) => (
+    <View
+      style={[
+        styles.noteCard,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+        },
+      ]}
+    >
+      <View style={styles.noteHeader}>
+        <View style={styles.noteHeading}>
+          <View style={[styles.noteTypeBadge, { backgroundColor: theme.colors.surfaceHighlight }]}>
+            <Text style={[styles.noteTypeText, { color: theme.colors.primary }]}>
+              {item.findingType.replace('_', ' ')}
+            </Text>
+          </View>
+          <Text style={[styles.noteDate, { color: theme.colors.text.muted }]}>
+            {formatDateTime(item.createdAt)}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => handleDeleteNote(item._id)}
+          style={[styles.noteDeleteButton, { borderColor: theme.colors.border }]}
+        >
+          <Trash2 size={14} color={theme.colors.status.error} />
+        </TouchableOpacity>
+      </View>
+
+      <Text style={[styles.noteBody, { color: theme.colors.text.primary }]}>
+        {item.body}
+      </Text>
+
+      <Text style={[styles.noteAuthor, { color: theme.colors.text.secondary }]}>
+        Added by {item.createdBy?.name || item.createdBy?.email || 'Investigator'}
+      </Text>
     </View>
   );
+
+  const renderAiList = (items: string[] = []) => {
+    if (!items.length) {
+      return (
+        <Text style={[styles.aiMutedText, { color: theme.colors.text.muted }]}>
+          No items identified.
+        </Text>
+      );
+    }
+
+    return items.map((item, index) => (
+      <Text key={`${item}-${index}`} style={[styles.aiBulletText, { color: theme.colors.text.secondary }]}>
+        {index + 1}. {item}
+      </Text>
+    ));
+  };
 
   if (loading) {
     return (
@@ -409,6 +822,198 @@ const handleDeleteCase = () => {
   return (
     <ScreenWrapper withSidebar>
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <Modal
+          visible={Boolean(selectedFile)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedFile(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View
+              style={[
+                styles.fileDetailModal,
+                {
+                  backgroundColor: theme.colors.background,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <View style={styles.modalHeader}>
+                <View style={styles.fileInfo}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+                    {selectedFile?.originalName || 'Evidence File'}
+                  </Text>
+                  <Text style={[styles.sectionSubtitle, { color: theme.colors.text.secondary }]}>
+                    Evidence detail and preview
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setSelectedFile(null)}
+                  style={[styles.modalCloseButton, { borderColor: theme.colors.border }]}
+                >
+                  <XCircle size={18} color={theme.colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+
+              {selectedFile ? (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={styles.fileDetailActions}>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={handleDownloadSelectedFile}
+                      style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
+                    >
+                      <Download size={16} color={theme.colors.text.primary} />
+                      <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
+                        Download
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.detailGrid}>
+                    <View style={[styles.detailItem, { borderColor: theme.colors.border }]}>
+                      <Text style={[styles.detailLabel, { color: theme.colors.text.muted }]}>Type</Text>
+                      <Text style={[styles.detailValue, { color: theme.colors.text.primary }]}>
+                        {selectedFile.fileType}
+                      </Text>
+                    </View>
+                    <View style={[styles.detailItem, { borderColor: theme.colors.border }]}>
+                      <Text style={[styles.detailLabel, { color: theme.colors.text.muted }]}>Size</Text>
+                      <Text style={[styles.detailValue, { color: theme.colors.text.primary }]}>
+                        {formatBytes(selectedFile.fileSize)}
+                      </Text>
+                    </View>
+                    <View style={[styles.detailItem, { borderColor: theme.colors.border }]}>
+                      <Text style={[styles.detailLabel, { color: theme.colors.text.muted }]}>Status</Text>
+                      <Text style={[styles.detailValue, { color: getStatusColor(selectedFile.status) }]}>
+                        {selectedFile.status}
+                      </Text>
+                    </View>
+                    <View style={[styles.detailItem, { borderColor: theme.colors.border }]}>
+                      <Text style={[styles.detailLabel, { color: theme.colors.text.muted }]}>Uploaded</Text>
+                      <Text style={[styles.detailValue, { color: theme.colors.text.primary }]}>
+                        {formatDateTime(selectedFile.createdAt)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.detailHashBlock, { borderColor: theme.colors.border }]}>
+                    <Text style={[styles.detailLabel, { color: theme.colors.text.muted }]}>SHA-256</Text>
+                    <Text style={[styles.detailHashText, { color: theme.colors.text.primary }]}>
+                      {selectedFile.sha256Hash || 'N/A'}
+                    </Text>
+                  </View>
+
+                  {selectedFile.errorReason ? (
+                    <Text style={[styles.errorReason, { color: theme.colors.status.error }]}>
+                      {selectedFile.errorReason}
+                    </Text>
+                  ) : null}
+
+                  <Text style={[styles.modalSectionTitle, { color: theme.colors.text.primary }]}>
+                    Preview
+                  </Text>
+                  <View style={[styles.previewBox, { borderColor: theme.colors.border }]}>
+                    {loadingFilePreview ? (
+                      <ActivityIndicator color={theme.colors.primary} />
+                    ) : selectedFile.fileType === 'image' && selectedFilePreviewUrl ? (
+                      <Image source={{ uri: selectedFilePreviewUrl }} style={styles.imagePreview} resizeMode="contain" />
+                    ) : selectedFile.fileType === 'pdf' && selectedFilePreviewUrl ? (
+                      <TouchableOpacity activeOpacity={0.85} onPress={() => Linking.openURL(selectedFilePreviewUrl)}>
+                        <Text style={[styles.previewLinkText, { color: theme.colors.primary }]}>
+                          Open PDF Preview
+                        </Text>
+                      </TouchableOpacity>
+                    ) : selectedFileTextPreview ? (
+                      <Text style={[styles.textPreview, { color: theme.colors.text.secondary }]}>
+                        {selectedFileTextPreview}
+                      </Text>
+                    ) : (
+                      <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
+                        Preview is not available for this file type. Use Download to inspect the original evidence.
+                      </Text>
+                    )}
+                  </View>
+
+                  <Text style={[styles.modalSectionTitle, { color: theme.colors.text.primary }]}>
+                    Events From This File
+                  </Text>
+                  {selectedFileEvents.length === 0 ? (
+                    <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
+                      No timeline events extracted from this file yet.
+                    </Text>
+                  ) : (
+                    selectedFileEvents.slice(0, 8).map((event) => (
+                      <View key={event._id} style={[styles.relatedItem, { borderColor: theme.colors.border }]}>
+                        <Text style={[styles.relatedTitle, { color: theme.colors.text.primary }]}>
+                          {event.title || event.eventType}
+                        </Text>
+                        <Text style={[styles.relatedMeta, { color: theme.colors.text.secondary }]}>
+                          {formatDateTime(event.timestamp)} • {event.eventType}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+
+                  <Text style={[styles.modalSectionTitle, { color: theme.colors.text.primary }]}>
+                    Notes Linked To This File
+                  </Text>
+                  <View style={[styles.fileNoteComposer, { borderColor: theme.colors.border }]}>
+                    <TextInput
+                      value={selectedFileNoteText}
+                      onChangeText={setSelectedFileNoteText}
+                      placeholder="Add a note to this evidence file..."
+                      placeholderTextColor={theme.colors.text.muted}
+                      multiline
+                      style={[
+                        styles.fileNoteInput,
+                        {
+                          color: theme.colors.text.primary,
+                          borderColor: theme.colors.border,
+                        },
+                      ]}
+                    />
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={handleCreateSelectedFileNote}
+                      disabled={creatingFileNote}
+                      style={[styles.addNoteButton, { backgroundColor: theme.colors.primary }]}
+                    >
+                      {creatingFileNote ? (
+                        <ActivityIndicator color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <Plus size={16} color="#FFFFFF" />
+                          <Text style={styles.addNoteButtonText}>Add File Note</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  {selectedFileNotes.length === 0 ? (
+                    <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
+                      No notes are linked to this file yet.
+                    </Text>
+                  ) : (
+                    selectedFileNotes.map((note) => (
+                      <View key={note._id} style={[styles.relatedItem, { borderColor: theme.colors.border }]}>
+                        <Text style={[styles.relatedTitle, { color: theme.colors.text.primary }]}>
+                          {note.findingType.replace('_', ' ')}
+                        </Text>
+                        <Text style={[styles.relatedMeta, { color: theme.colors.text.secondary }]}>
+                          {note.body}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
+              ) : null}
+            </View>
+          </View>
+        </Modal>
+
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
@@ -562,6 +1167,78 @@ const handleDeleteCase = () => {
 
               <TouchableOpacity
                 style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
+                onPress={goToRelationshipGraph}
+                disabled={deleting || updatingStatus}
+                activeOpacity={0.85}
+              >
+                <Network size={17} color={theme.colors.text.primary} />
+                <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
+                  View Relationship Graph
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
+                onPress={() => setIsCustodyOpen((current) => !current)}
+                disabled={deleting || updatingStatus}
+                activeOpacity={0.85}
+              >
+                <History size={17} color={theme.colors.text.primary} />
+                <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
+                  {isCustodyOpen ? 'Hide Chain of Custody' : 'View Chain of Custody'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
+                onPress={() => setIsNotesOpen((current) => !current)}
+                disabled={deleting || updatingStatus}
+                activeOpacity={0.85}
+              >
+                <MessageSquare size={17} color={theme.colors.text.primary} />
+                <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
+                  {isNotesOpen ? 'Hide Notes' : 'View Notes'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
+                onPress={handleBuildReport}
+                disabled={deleting || updatingStatus || buildingReport}
+                activeOpacity={0.85}
+              >
+                {buildingReport ? (
+                  <ActivityIndicator color={theme.colors.primary} />
+                ) : (
+                  <>
+                    <FileOutput size={17} color={theme.colors.text.primary} />
+                    <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
+                      Build Report
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
+                onPress={handleGenerateAiSummary}
+                disabled={deleting || updatingStatus || generatingAiSummary}
+                activeOpacity={0.85}
+              >
+                {generatingAiSummary ? (
+                  <ActivityIndicator color={theme.colors.primary} />
+                ) : (
+                  <>
+                    <Bot size={17} color={theme.colors.text.primary} />
+                    <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
+                      AI Summary
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
                 onPress={handleToggleCaseClosed}
                 disabled={deleting || updatingStatus}
                 activeOpacity={0.85}
@@ -650,6 +1327,423 @@ const handleDeleteCase = () => {
               contentContainerStyle={styles.filesList}
             />
           )}
+
+          <TouchableOpacity
+            style={[
+              styles.notesTogglePanel,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
+            onPress={() => setIsNotesOpen((current) => !current)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.custodyHeadingRow}>
+              <View style={[styles.custodyIconBox, { backgroundColor: theme.colors.surfaceHighlight }]}>
+                <MessageSquare size={20} color={theme.colors.primary} />
+              </View>
+
+              <View style={styles.headerText}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+                  Investigator Notes
+                </Text>
+                <Text style={[styles.sectionSubtitle, { color: theme.colors.text.secondary }]}>
+                  {notes.length} note{notes.length === 1 ? '' : 's'} and {bookmarkedEvents.length} bookmarked event{bookmarkedEvents.length === 1 ? '' : 's'}.
+                </Text>
+              </View>
+
+              {isNotesOpen ? (
+                <ChevronUp size={20} color={theme.colors.text.secondary} />
+              ) : (
+                <ChevronDown size={20} color={theme.colors.text.secondary} />
+              )}
+            </View>
+          </TouchableOpacity>
+
+          {isNotesOpen ? (
+            <View style={styles.notesSection}>
+              <View
+                style={[
+                  styles.noteComposer,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <TextInput
+                  value={noteText}
+                  onChangeText={setNoteText}
+                  placeholder="Add an investigation note..."
+                  placeholderTextColor={theme.colors.text.muted}
+                  multiline
+                  style={[
+                    styles.noteInput,
+                    {
+                      color: theme.colors.text.primary,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                />
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.findingPills}
+                >
+                  {findingOptions.map((option) => {
+                    const active = selectedFindingType === option.value;
+                    return (
+                      <TouchableOpacity
+                        key={option.value}
+                        activeOpacity={0.8}
+                        onPress={() => setSelectedFindingType(option.value)}
+                        style={[
+                          styles.findingPill,
+                          {
+                            borderColor: active ? theme.colors.primary : theme.colors.border,
+                            backgroundColor: active ? theme.colors.surfaceHighlight : 'transparent',
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.findingPillText,
+                            {
+                              color: active ? theme.colors.primary : theme.colors.text.secondary,
+                            },
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={handleCreateNote}
+                  disabled={creatingNote}
+                  style={[styles.addNoteButton, { backgroundColor: theme.colors.primary }]}
+                >
+                  {creatingNote ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Plus size={16} color="#FFFFFF" />
+                      <Text style={styles.addNoteButtonText}>Add Note</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {bookmarkedEvents.length > 0 ? (
+                <View
+                  style={[
+                    styles.bookmarkPanel,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  <View style={styles.bookmarkPanelHeader}>
+                    <Star size={17} color={theme.colors.status.warning} fill={theme.colors.status.warning} />
+                    <Text style={[styles.bookmarkPanelTitle, { color: theme.colors.text.primary }]}>
+                      Bookmarked Timeline Events
+                    </Text>
+                  </View>
+
+                  {bookmarkedEvents.slice(0, 5).map((event) => (
+                    <View key={event._id} style={styles.bookmarkedEventRow}>
+                      <Text
+                        numberOfLines={1}
+                        style={[styles.bookmarkedEventText, { color: theme.colors.text.secondary }]}
+                      >
+                        {event.title || event.description || event.eventType}
+                      </Text>
+
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => handleToggleBookmarkFromCase(event._id)}
+                        style={[styles.unstarButton, { borderColor: theme.colors.border }]}
+                      >
+                        <Star
+                          size={14}
+                          color={theme.colors.status.warning}
+                          fill={theme.colors.status.warning}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {notes.length === 0 ? (
+                <View
+                  style={[
+                    styles.emptyState,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  <MessageSquare size={34} color={theme.colors.text.muted} />
+                  <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
+                    No investigation notes yet
+                  </Text>
+                  <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
+                    Add notes for suspicious timestamps, confirmed evidence, or report findings.
+                  </Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={notes}
+                  renderItem={renderNote}
+                  keyExtractor={(item) => item._id}
+                  scrollEnabled={false}
+                  contentContainerStyle={styles.notesList}
+                />
+              )}
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={[
+              styles.aiTogglePanel,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
+            onPress={() => setIsAiOpen((current) => !current)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.custodyHeadingRow}>
+              <View style={[styles.custodyIconBox, { backgroundColor: theme.colors.surfaceHighlight }]}>
+                <Bot size={20} color={theme.colors.primary} />
+              </View>
+
+              <View style={styles.headerText}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+                  AI Case Summary
+                </Text>
+                <Text style={[styles.sectionSubtitle, { color: theme.colors.text.secondary }]}>
+                  {aiAnalysis
+                    ? `Generated by ${aiProvider ? `${aiProvider} ` : ''}${aiModel || 'AI'}${aiGeneratedAt ? ` on ${formatDateTime(aiGeneratedAt)}` : ''}.`
+                    : 'Generate a forensic summary, suspicious findings, and next steps.'}
+                </Text>
+              </View>
+
+              {isAiOpen ? (
+                <ChevronUp size={20} color={theme.colors.text.secondary} />
+              ) : (
+                <ChevronDown size={20} color={theme.colors.text.secondary} />
+              )}
+            </View>
+          </TouchableOpacity>
+
+          {isAiOpen ? (
+            <View
+              style={[
+                styles.aiPanel,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              {generatingAiSummary && !aiAnalysis ? (
+                <View style={styles.aiEmptyBlock}>
+                  <ActivityIndicator color={theme.colors.primary} />
+                  <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
+                    Generating AI summary...
+                  </Text>
+                  <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
+                    This can take a little while for cases with many files or timeline events.
+                  </Text>
+                </View>
+              ) : !aiAnalysis ? (
+                <View style={styles.aiEmptyBlock}>
+                  <Bot size={30} color={theme.colors.text.muted} />
+                  <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
+                    No AI summary yet
+                  </Text>
+                  <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
+                    Generate a summary after uploading evidence, extracting metadata, or adding notes.
+                  </Text>
+                  {aiError ? (
+                    <Text style={[styles.aiErrorText, { color: theme.colors.status.error }]}>
+                      {aiError}
+                    </Text>
+                  ) : null}
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={handleGenerateAiSummary}
+                    disabled={generatingAiSummary}
+                    style={[styles.addNoteButton, { backgroundColor: theme.colors.primary }]}
+                  >
+                    {generatingAiSummary ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Bot size={16} color="#FFFFFF" />
+                        <Text style={styles.addNoteButtonText}>Generate AI Summary</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <Text style={[styles.aiSectionTitle, { color: theme.colors.text.primary }]}>
+                    Case Summary
+                  </Text>
+                  <Text style={[styles.aiParagraph, { color: theme.colors.text.secondary }]}>
+                    {aiAnalysis.caseSummary}
+                  </Text>
+
+                  <Text style={[styles.aiSectionTitle, { color: theme.colors.text.primary }]}>
+                    Suspicious Findings
+                  </Text>
+                  {aiAnalysis.suspiciousFindings?.length ? (
+                    aiAnalysis.suspiciousFindings.map((finding, index) => (
+                      <View
+                        key={`${finding.title}-${index}`}
+                        style={[styles.aiFindingCard, { borderColor: theme.colors.border }]}
+                      >
+                        <View style={styles.aiFindingHeader}>
+                          <Text style={[styles.aiFindingTitle, { color: theme.colors.text.primary }]}>
+                            {finding.title}
+                          </Text>
+                          <View style={[styles.aiSeverityBadge, { backgroundColor: theme.colors.surfaceHighlight }]}>
+                            <Text style={[styles.aiSeverityText, { color: theme.colors.primary }]}>
+                              {finding.severity}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.aiParagraph, { color: theme.colors.text.secondary }]}>
+                          {finding.reason}
+                        </Text>
+                        <Text style={[styles.aiMutedText, { color: theme.colors.text.muted }]}>
+                          Evidence: {finding.relatedEvidence || 'N/A'}
+                        </Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={[styles.aiMutedText, { color: theme.colors.text.muted }]}>
+                      No suspicious findings identified.
+                    </Text>
+                  )}
+
+                  <Text style={[styles.aiSectionTitle, { color: theme.colors.text.primary }]}>
+                    Timeline Observations
+                  </Text>
+                  {renderAiList(aiAnalysis.timelineObservations)}
+
+                  <Text style={[styles.aiSectionTitle, { color: theme.colors.text.primary }]}>
+                    Metadata Concerns
+                  </Text>
+                  {renderAiList(aiAnalysis.metadataConcerns)}
+
+                  <Text style={[styles.aiSectionTitle, { color: theme.colors.text.primary }]}>
+                    Recommended Next Steps
+                  </Text>
+                  {renderAiList(aiAnalysis.recommendedNextSteps)}
+
+                  <Text style={[styles.aiSectionTitle, { color: theme.colors.text.primary }]}>
+                    Report Draft
+                  </Text>
+                  <Text style={[styles.aiParagraph, { color: theme.colors.text.secondary }]}>
+                    {aiAnalysis.reportDraft}
+                  </Text>
+
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={handleGenerateAiSummary}
+                    disabled={generatingAiSummary}
+                    style={[styles.regenerateAiButton, { borderColor: theme.colors.border }]}
+                  >
+                    {generatingAiSummary ? (
+                      <ActivityIndicator color={theme.colors.primary} />
+                    ) : (
+                      <>
+                        <RefreshCcw size={15} color={theme.colors.text.primary} />
+                        <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
+                          Regenerate Summary
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={[
+              styles.custodyTogglePanel,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
+            onPress={() => setIsCustodyOpen((current) => !current)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.custodyHeadingRow}>
+              <View style={[styles.custodyIconBox, { backgroundColor: theme.colors.surfaceHighlight }]}>
+                <History size={20} color={theme.colors.primary} />
+              </View>
+
+              <View style={styles.headerText}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+                  Chain of Custody
+                </Text>
+                <Text style={[styles.sectionSubtitle, { color: theme.colors.text.secondary }]}>
+                  {custodyEntries.length} custody event{custodyEntries.length === 1 ? '' : 's'} recorded.
+                </Text>
+              </View>
+
+              {isCustodyOpen ? (
+                <ChevronUp size={20} color={theme.colors.text.secondary} />
+              ) : (
+                <ChevronDown size={20} color={theme.colors.text.secondary} />
+              )}
+            </View>
+          </TouchableOpacity>
+
+          {isCustodyOpen ? (
+            custodyEntries.length === 0 ? (
+              <View
+                style={[
+                  styles.emptyState,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <ShieldCheck size={34} color={theme.colors.text.muted} />
+                <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
+                  No custody events yet
+                </Text>
+                <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
+                  Upload evidence or run extraction to begin building the custody record.
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={custodyEntries}
+                renderItem={renderCustodyEntry}
+                keyExtractor={(item) => item._id}
+                scrollEnabled={false}
+                contentContainerStyle={styles.custodyList}
+              />
+            )
+          ) : null}
         </ScrollView>
       </View>
     </ScreenWrapper>
@@ -830,6 +1924,7 @@ const styles = StyleSheet.create({
   },
   filesList: {
     gap: 12,
+    marginBottom: 28,
   },
   fileCard: {
     borderWidth: 1,
@@ -897,6 +1992,315 @@ const styles = StyleSheet.create({
     padding: 28,
     alignItems: 'center',
   },
+  custodyTogglePanel: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 16,
+    marginTop: 2,
+  },
+  notesTogglePanel: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 14,
+  },
+  aiTogglePanel: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 14,
+  },
+  aiPanel: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 28,
+  },
+  aiEmptyBlock: {
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  aiSectionTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    marginTop: 14,
+    marginBottom: 7,
+  },
+  aiParagraph: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  aiBulletText: {
+    fontSize: 13,
+    lineHeight: 21,
+    marginBottom: 3,
+  },
+  aiMutedText: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  aiErrorText: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  aiFindingCard: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 9,
+  },
+  aiFindingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 7,
+  },
+  aiFindingTitle: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  aiSeverityBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  aiSeverityText: {
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  regenerateAiButton: {
+    minHeight: 42,
+    borderRadius: 6,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    alignSelf: 'flex-start',
+    marginTop: 16,
+  },
+  notesSection: {
+    gap: 12,
+    marginBottom: 28,
+  },
+  noteComposer: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 14,
+  },
+  noteInput: {
+    minHeight: 86,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlignVertical: 'top',
+  },
+  findingPills: {
+    gap: 8,
+    paddingVertical: 12,
+  },
+  findingPill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  findingPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  addNoteButton: {
+    minHeight: 42,
+    borderRadius: 6,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    alignSelf: 'flex-start',
+  },
+  addNoteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  bookmarkPanel: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 14,
+  },
+  bookmarkPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  bookmarkPanelTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  bookmarkedEventText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 19,
+  },
+  bookmarkedEventRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 3,
+  },
+  unstarButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notesList: {
+    gap: 12,
+  },
+  noteCard: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 14,
+  },
+  noteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  noteHeading: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  noteTypeBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  noteTypeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  noteDate: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  noteDeleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noteBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 10,
+    fontWeight: '700',
+  },
+  noteAuthor: {
+    fontSize: 11,
+    marginTop: 9,
+  },
+  custodyHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  custodyIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  custodyList: {
+    gap: 12,
+  },
+  custodyRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  custodyMarker: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+    marginRight: 12,
+  },
+  custodyCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 15,
+  },
+  custodyTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  custodyTitleGroup: {
+    flex: 1,
+  },
+  custodyLabel: {
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  custodyTime: {
+    fontSize: 11,
+    marginTop: 3,
+    fontWeight: '700',
+  },
+  custodyStatusBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  custodyStatusText: {
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  custodySummary: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 10,
+  },
+  custodyMetaGrid: {
+    gap: 5,
+    marginTop: 10,
+  },
+  custodyMeta: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  custodyHash: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+  },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '900',
@@ -916,5 +2320,131 @@ const styles = StyleSheet.create({
   centerText: {
     marginTop: 10,
     fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  fileDetailModal: {
+    width: '100%',
+    maxWidth: 860,
+    maxHeight: '88%',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 18,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 12,
+  },
+  modalCloseButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fileDetailActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 12,
+  },
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  detailItem: {
+    flex: 1,
+    minWidth: 150,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+  },
+  detailLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    marginBottom: 5,
+  },
+  detailValue: {
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  detailHashBlock: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 10,
+  },
+  detailHashText: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    lineHeight: 17,
+  },
+  modalSectionTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    marginTop: 18,
+    marginBottom: 10,
+  },
+  previewBox: {
+    minHeight: 160,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imagePreview: {
+    width: '100%',
+    height: 340,
+  },
+  previewLinkText: {
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  textPreview: {
+    width: '100%',
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: 'monospace',
+  },
+  relatedItem: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 11,
+    marginBottom: 8,
+  },
+  relatedTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  relatedMeta: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  fileNoteComposer: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  fileNoteInput: {
+    minHeight: 74,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlignVertical: 'top',
+    marginBottom: 10,
   },
 });

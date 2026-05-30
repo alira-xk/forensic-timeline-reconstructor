@@ -28,6 +28,12 @@ const auditLogSchema = new mongoose.Schema(
         'PASSWORD_CHANGED',
         'PASSWORD_RESET_REQUESTED',
         'PASSWORD_RESET_COMPLETED',
+        'NOTE_CREATED',
+        'NOTE_UPDATED',
+        'NOTE_DELETED',
+        'EVENT_BOOKMARKED',
+        'EVENT_UNBOOKMARKED',
+        'AI_SUMMARY_GENERATED',
       ],
     },
     resource: {
@@ -57,7 +63,11 @@ const auditLogSchema = new mongoose.Schema(
   }
 );
 
-// TTL index — auto-delete audit logs after 90 days
-auditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7776000 });
+auditLogSchema.index({ createdAt: -1 });
+auditLogSchema.index({ user: 1, createdAt: -1 });
+auditLogSchema.index({ action: 1, createdAt: -1 });
+auditLogSchema.index({ resource: 1, resourceId: 1, createdAt: -1 });
+auditLogSchema.index({ 'details.caseId': 1, createdAt: -1 });
+auditLogSchema.index({ 'details.fileId': 1, createdAt: -1 });
 
 module.exports = mongoose.model('AuditLog', auditLogSchema);

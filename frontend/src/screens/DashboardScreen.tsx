@@ -16,6 +16,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   BarChart3,
   CheckCircle,
   Clock,
@@ -66,6 +67,7 @@ type DetailItem = {
   title: string;
   subtitle: string;
   meta: string;
+  caseId?: string;
 };
 
 export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
@@ -181,6 +183,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         title: item.title,
         subtitle: item.description || 'No description provided.',
         meta: `Status: ${item.status} • Created: ${formatDate(item.createdAt)}`,
+        caseId: item._id,
       }));
     }
 
@@ -192,6 +195,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
           title: item.title,
           subtitle: item.description || 'No description provided.',
           meta: `Status: ${item.status} • Created: ${formatDate(item.createdAt)}`,
+          caseId: item._id,
         }));
     }
 
@@ -316,6 +320,16 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
     }
 
     navigation.navigate('Timeline', { caseId: latestCase._id });
+  };
+
+  const canOpenCaseFromSelectedList =
+    selectedMetric === 'TOTAL_CASES' || selectedMetric === 'ACTIVE_CASES';
+
+  const handleDetailItemPress = (item: DetailItem) => {
+    if (!canOpenCaseFromSelectedList || !item.caseId) {
+      return;
+    }
+    navigation.navigate('CaseDetail', { caseId: item.caseId });
   };
 
   const renderStatCard = (
@@ -514,32 +528,42 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
               ) : (
                 selectedDetails.map((item, index) => (
                   <View key={item.id}>
-                    <View style={styles.detailItem}>
-                      <View style={[styles.detailDot, { backgroundColor: theme.colors.primary }]} />
+                    <TouchableOpacity
+                      activeOpacity={canOpenCaseFromSelectedList ? 0.8 : 1}
+                      disabled={!canOpenCaseFromSelectedList}
+                      onPress={() => handleDetailItemPress(item)}
+                    >
+                      <View style={styles.detailItem}>
+                        <View style={[styles.detailDot, { backgroundColor: theme.colors.primary }]} />
 
-                      <View style={styles.detailContent}>
-                        <Text
-                          numberOfLines={1}
-                          style={[styles.detailItemTitle, { color: theme.colors.text.primary }]}
-                        >
-                          {item.title}
-                        </Text>
+                        <View style={styles.detailContent}>
+                          <Text
+                            numberOfLines={1}
+                            style={[styles.detailItemTitle, { color: theme.colors.text.primary }]}
+                          >
+                            {item.title}
+                          </Text>
 
-                        <Text
-                          numberOfLines={2}
-                          style={[styles.detailItemSubtitle, { color: theme.colors.text.secondary }]}
-                        >
-                          {item.subtitle}
-                        </Text>
+                          <Text
+                            numberOfLines={2}
+                            style={[styles.detailItemSubtitle, { color: theme.colors.text.secondary }]}
+                          >
+                            {item.subtitle}
+                          </Text>
 
-                        <Text
-                          numberOfLines={1}
-                          style={[styles.detailItemMeta, { color: theme.colors.text.muted }]}
-                        >
-                          {item.meta}
-                        </Text>
+                          <Text
+                            numberOfLines={1}
+                            style={[styles.detailItemMeta, { color: theme.colors.text.muted }]}
+                          >
+                            {item.meta}
+                          </Text>
+                        </View>
+
+                        {canOpenCaseFromSelectedList ? (
+                          <ArrowRight size={16} color={theme.colors.text.muted} />
+                        ) : null}
                       </View>
-                    </View>
+                    </TouchableOpacity>
 
                     {index !== selectedDetails.length - 1 ? (
                       <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />

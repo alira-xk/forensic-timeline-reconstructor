@@ -21,15 +21,18 @@ export const getFilesByCase = async (caseId: string): Promise<EvidenceFile[]> =>
   return response.data || [];
 };
 
-export const uploadEvidenceFile = async (
+export const uploadEvidenceFiles = async (
   caseId: string,
-  file: any
+  files: any[]
 ): Promise<EvidenceFile[]> => {
   const formData = new FormData();
 
-  if (file.file) {
-    formData.append('files', file.file);
-  } else {
+  for (const file of files) {
+    if (file.file) {
+      formData.append('files', file.file);
+      continue;
+    }
+
     formData.append('files', {
       uri: file.uri,
       name: file.name || 'evidence-file',
@@ -53,4 +56,41 @@ export const uploadEvidenceFile = async (
   }
 
   return data.data?.files || [];
+};
+
+// Backward-compatible alias for existing single-file call sites.
+export const uploadEvidenceFile = async (
+  caseId: string,
+  file: any
+): Promise<EvidenceFile[]> => uploadEvidenceFiles(caseId, [file]);
+
+export const getFilePreviewUrl = async (fileId: string): Promise<string> => {
+  const accessToken = await getAccessToken();
+  const tokenQuery = accessToken ? `?token=${encodeURIComponent(accessToken)}` : '';
+  return `${API_BASE_URL}/files/${fileId}/preview${tokenQuery}`;
+};
+
+export const getFileDownloadUrl = async (fileId: string): Promise<string> => {
+  const accessToken = await getAccessToken();
+  const tokenQuery = accessToken ? `?token=${encodeURIComponent(accessToken)}` : '';
+  return `${API_BASE_URL}/files/${fileId}/download${tokenQuery}`;
+};
+
+export const getTextFilePreview = async (fileId: string): Promise<string> => {
+  const accessToken = await getAccessToken();
+  const response = await fetch(`${API_BASE_URL}/files/${fileId}/preview`, {
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    try {
+      const errorData = JSON.parse(text);
+      throw new Error(errorData.message || 'File preview failed.');
+    } catch (error: any) {
+      throw new Error(error.message || 'File preview failed.');
+    }
+  }
+
+  return text;
 };

@@ -14,6 +14,7 @@ import { CompositeScreenProps, useFocusEffect } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
+  ArrowLeft,
   AlertCircle,
   CalendarClock,
   CheckCircle2,
@@ -24,6 +25,7 @@ import {
   Image,
   RefreshCcw,
   Search,
+  Star,
   Upload,
 } from 'lucide-react-native';
 
@@ -31,7 +33,11 @@ import { ScreenWrapper } from '../components/ScreenWrapper';
 import { Input } from '../components/Input';
 import { useTheme } from '../theme/ThemeContext';
 import { RootStackParamList, MainTabParamList } from '../types/navigation';
-import { getTimelineByCase, TimelineEvent } from '../services/timelineService';
+import {
+  getTimelineByCase,
+  TimelineEvent,
+  toggleTimelineBookmark,
+} from '../services/timelineService';
 import { exportTimelineCsv, exportTimelineJson } from '../services/exportService';
 
 type Props = CompositeScreenProps<
@@ -39,7 +45,7 @@ type Props = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList>
 >;
 
-export const TimelineScreen: React.FC<Props> = ({ route }) => {
+export const TimelineScreen: React.FC<Props> = ({ route, navigation }) => {
   const { theme } = useTheme();
 
   const caseId = (route.params as { caseId?: string } | undefined)?.caseId || '';
@@ -110,6 +116,30 @@ export const TimelineScreen: React.FC<Props> = ({ route }) => {
       Alert.alert('Export Ready', `${result.filename} has been downloaded.`);
     } catch (error: any) {
       Alert.alert('Export Failed', error.message || 'Unable to export CSV file.');
+    }
+  };
+
+  const handleGoBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+
+    navigation.navigate('Main');
+  };
+
+  const handleToggleBookmark = async (eventId: string) => {
+    try {
+      const updatedEvent = await toggleTimelineBookmark(eventId);
+      setEvents((currentEvents) =>
+        currentEvents.map((event) =>
+          event._id === eventId
+            ? { ...event, isBookmarked: updatedEvent.isBookmarked }
+            : event
+        )
+      );
+    } catch (error: any) {
+      Alert.alert('Bookmark Failed', error.message || 'Could not update bookmark.');
     }
   };
 
@@ -257,10 +287,30 @@ export const TimelineScreen: React.FC<Props> = ({ route }) => {
               </Text>
             </View>
 
-            <View style={[styles.typeBadge, { backgroundColor: `${color}20` }]}>
-              <Text style={[styles.typeBadgeText, { color }]}>
-                {item.fileRecord?.fileType || 'EVENT'}
-              </Text>
+            <View style={styles.eventActions}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => handleToggleBookmark(item._id)}
+                style={[
+                  styles.bookmarkButton,
+                  {
+                    borderColor: item.isBookmarked ? theme.colors.status.warning : theme.colors.border,
+                    backgroundColor: item.isBookmarked ? `${theme.colors.status.warning}18` : 'transparent',
+                  },
+                ]}
+              >
+                <Star
+                  size={14}
+                  color={item.isBookmarked ? theme.colors.status.warning : theme.colors.text.secondary}
+                  fill={item.isBookmarked ? theme.colors.status.warning : 'transparent'}
+                />
+              </TouchableOpacity>
+
+              <View style={[styles.typeBadge, { backgroundColor: `${color}20` }]}>
+                <Text style={[styles.typeBadgeText, { color }]}>
+                  {item.fileRecord?.fileType || 'EVENT'}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -312,6 +362,14 @@ export const TimelineScreen: React.FC<Props> = ({ route }) => {
         >
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={handleGoBack}
+                style={[styles.backButton, { borderColor: theme.colors.border }]}
+              >
+                <ArrowLeft size={15} color={theme.colors.text.secondary} />
+              </TouchableOpacity>
+
               <Text style={[styles.screenTitle, { color: theme.colors.text.primary }]}>
                 Forensic Timeline
               </Text>
@@ -504,6 +562,14 @@ const styles = StyleSheet.create({
     gap: 12,
     flex: 1,
   },
+  backButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   screenTitle: {
     fontSize: 18,
     fontWeight: '900',
@@ -654,6 +720,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     flex: 1,
+  },
+  eventActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bookmarkButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   eventType: {
     fontSize: 12,

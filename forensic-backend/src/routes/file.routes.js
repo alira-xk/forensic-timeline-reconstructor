@@ -16,6 +16,8 @@ router.post(
   fileController.uploadFiles
 );
 router.get('/case/:caseId', fileController.getFilesByCase);
+router.get('/:id/preview', fileController.previewFile);
+router.get('/:id/download', fileController.downloadFile);
 router.get('/:id', fileController.getFile);
 router.delete('/:id', fileController.deleteFile);
 
