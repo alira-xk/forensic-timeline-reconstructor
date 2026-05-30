@@ -87,6 +87,12 @@ app.use(errorHandler);
 
 const redactMongoUri = (uri = '') => uri.replace(/\/\/.*@/, '//<credentials>@');
 
+const isLocalMongoUri = (uri = '') => (
+  uri.includes('localhost') ||
+  uri.includes('127.0.0.1') ||
+  uri.includes('::1')
+);
+
 const removeLegacyAuditTtlIndex = async () => {
   try {
     const collection = mongoose.connection.collection('auditlogs');
@@ -130,6 +136,10 @@ const startServer = async () => {
     logger.error('Failed to connect to MongoDB', { error: err.message });
     console.error('FATAL: Could not connect to MongoDB.');
     console.error('Check MONGODB_URI in forensic-backend/.env and make sure MongoDB is running.');
+    if (isLocalMongoUri(process.env.MONGODB_URI)) {
+      console.error('Your MONGODB_URI points to a local MongoDB instance. Other laptops cannot use your laptop database when your laptop is off.');
+      console.error('For shared use, create a MongoDB Atlas database and set MONGODB_URI to the mongodb+srv:// connection string on every developer machine.');
+    }
     console.error(err.message);
     process.exit(1);
   }

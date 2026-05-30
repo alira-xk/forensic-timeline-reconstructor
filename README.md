@@ -47,7 +47,7 @@ forensic-timeline-reconstructor/
 ## Prerequisites
 
 - **Node.js** >= 18.x
-- **MongoDB** >= 6.x (running on localhost:27017)
+- **MongoDB** >= 6.x or a shared **MongoDB Atlas** database
 - **Python** >= 3.9
 - **Expo CLI** (`npm install -g expo-cli`)
 
@@ -78,7 +78,23 @@ npm install
 
 ### 4. Environment Variables
 
-The `.env` file in `forensic-backend/` is pre-configured with defaults:
+Copy the template files first:
+
+```bash
+cp forensic-backend/.env.example forensic-backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item forensic-backend/.env.example forensic-backend/.env
+Copy-Item frontend/.env.example frontend/.env
+```
+
+Then edit `forensic-backend/.env`.
+
+For one developer using only their own machine, local MongoDB is fine:
 
 ```env
 PORT=5000
@@ -91,8 +107,40 @@ ENFORCE_EMAIL_DOMAIN_CHECKS=true
 ALLOWED_EMAIL_DOMAINS=
 ```
 
+For multiple people, use a shared MongoDB Atlas connection string instead:
+
+```env
+MONGODB_URI=mongodb+srv://USER:PASSWORD@CLUSTER.mongodb.net/forensic_timeline?retryWrites=true&w=majority
+```
+
+Do not commit `.env`. Each developer should create their own `.env` locally.
+
 > **Important:** Change JWT secrets in production!
 > For local dev, set `DEV_EMAIL_LOG=true` to print OTP/reset codes to the server console.
+
+### Shared Development Setup
+
+If another person clones the repo, they cannot use MongoDB running on your laptop. `localhost` always means "this computer", so `mongodb://localhost:27017/...` on your friend's laptop looks for MongoDB on your friend's laptop, not yours.
+
+To make the project work while your laptop is off:
+
+1. Create a free MongoDB Atlas cluster.
+2. Create a database user and password.
+3. Add your friend's IP address in Atlas Network Access, or use `0.0.0.0/0` for class/demo development.
+4. Put the same Atlas `mongodb+srv://...` URI in each developer's `forensic-backend/.env`.
+5. In `frontend/.env`, set `EXPO_PUBLIC_API_URL` to the backend they are running.
+
+For web on the same machine as the backend:
+
+```env
+EXPO_PUBLIC_API_URL=http://localhost:5000/api
+```
+
+For a phone or another laptop on the same Wi-Fi:
+
+```env
+EXPO_PUBLIC_API_URL=http://YOUR_BACKEND_LAN_IP:5000/api
+```
 
 ## Running
 
@@ -364,6 +412,8 @@ Paginated responses include:
 - Ensure MongoDB is running: `mongod`
 - Check `MONGODB_URI` in `.env` matches your setup
 - The backend now requires your configured MongoDB and will fail fast instead of switching to in-memory storage
+- If your friend cloned the repo, do not point `MONGODB_URI` to MongoDB on your laptop. Use MongoDB Atlas or install MongoDB on their laptop.
+- If using Atlas, confirm the IP address is allowed in Atlas Network Access and the username/password are correct.
 
 ### OTP Not Received
 - Set `DEV_EMAIL_LOG=true` in `.env` to print OTP to server console
