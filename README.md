@@ -105,6 +105,8 @@ PYTHON_PATH=python
 EXTRACTION_TIMEOUT=120000
 ENFORCE_EMAIL_DOMAIN_CHECKS=true
 ALLOWED_EMAIL_DOMAINS=
+ALLOWED_EMAIL_ADDRESSES=
+REQUIRE_EMAIL_ADDRESS_ALLOWLIST=false
 ```
 
 For multiple people, use a shared MongoDB Atlas connection string instead:
@@ -114,6 +116,13 @@ MONGODB_URI=mongodb+srv://USER:PASSWORD@CLUSTER.mongodb.net/forensic_timeline?re
 ```
 
 Do not commit `.env`. Each developer should create their own `.env` locally.
+
+Email signup checks work like this:
+
+- `ENFORCE_EMAIL_DOMAIN_CHECKS=true` checks that the domain looks deliverable.
+- `ALLOWED_EMAIL_DOMAINS=` can be left empty to allow any real domain, or filled with comma-separated domains such as `gmail.com,ucp.edu.pk`.
+- `ALLOWED_EMAIL_ADDRESSES=` can list special exact emails that should always be accepted.
+- `REQUIRE_EMAIL_ADDRESS_ALLOWLIST=true` makes only emails in `ALLOWED_EMAIL_ADDRESSES` able to register. Keep it `false` for normal signups.
 
 > **Important:** Change JWT secrets in production!
 > For local dev, set `DEV_EMAIL_LOG=true` to print OTP/reset codes to the server console.

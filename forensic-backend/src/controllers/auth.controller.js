@@ -94,6 +94,10 @@ const shouldEnforceEmailChecks = () => {
   return (process.env.ENFORCE_EMAIL_DOMAIN_CHECKS || 'true') === 'true';
 };
 
+const shouldRequireEmailAddressAllowlist = () => {
+  return (process.env.REQUIRE_EMAIL_ADDRESS_ALLOWLIST || 'false') === 'true';
+};
+
 const hasDnsMailTarget = async (domain) => {
   try {
     const mx = await dns.resolveMx(domain);
@@ -122,7 +126,11 @@ const validateEmailForDelivery = async (email) => {
   }
 
   const allowedEmailAddresses = getAllowedEmailAddresses();
-  if (allowedEmailAddresses.length && !allowedEmailAddresses.includes(cleanEmail)) {
+  if (allowedEmailAddresses.includes(cleanEmail)) {
+    return { ok: true, email: cleanEmail };
+  }
+
+  if (shouldRequireEmailAddressAllowlist() && allowedEmailAddresses.length) {
     return { ok: false, email: cleanEmail, message: 'This email address is not approved for registration.' };
   }
 
@@ -140,7 +148,11 @@ const validateEmailForDelivery = async (email) => {
 
   const allowedDomains = getAllowedDomains();
   if (allowedDomains.length && !allowedDomains.includes(domain)) {
-    return { ok: false, email: cleanEmail, message: 'Use an approved email domain.' };
+    return {
+      ok: false,
+      email: cleanEmail,
+      message: `The email domain "${domain}" is not approved for registration.`,
+    };
   }
 
   if (BLOCKED_EMAIL_DOMAINS.includes(domain)) {
