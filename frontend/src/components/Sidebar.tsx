@@ -149,7 +149,7 @@ const isActiveRoute = (targetRoute: string) => {
       style={[
         styles.container,
         {
-          backgroundColor: theme.colors.surface,
+          backgroundColor: theme.colors.panelStrong,
           borderRightColor: theme.colors.border,
         },
       ]}
@@ -186,9 +186,8 @@ const isActiveRoute = (targetRoute: string) => {
               style={[
                 styles.navItem,
                 {
-                  backgroundColor: active
-                    ? theme.colors.surfaceHighlight
-                    : 'transparent',
+                  backgroundColor: active ? `${theme.colors.primary}18` : 'transparent',
+                  borderColor: active ? `${theme.colors.primary}55` : 'transparent',
                 },
               ]}
               onPress={() => handleNavigation(item.route)}
@@ -219,7 +218,7 @@ const isActiveRoute = (targetRoute: string) => {
         contentContainerStyle={styles.middleContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.statsWidget, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.statsWidget, { backgroundColor: theme.colors.panel, borderColor: theme.colors.border }]}>
           <Text style={[styles.statsTitle, { color: theme.colors.text.muted }]}>
             Case Summary
           </Text>
@@ -292,7 +291,7 @@ const isActiveRoute = (targetRoute: string) => {
           )}
         </View>
 
-        <View style={[styles.systemWidget, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.systemWidget, { backgroundColor: theme.colors.panel, borderColor: theme.colors.border }]}>
           <Text style={[styles.statsTitle, { color: theme.colors.text.muted }]}>
             System Status
           </Text>
@@ -346,7 +345,7 @@ const isActiveRoute = (targetRoute: string) => {
           onPress={() => setShowSettings(true)}
           activeOpacity={0.85}
         >
-          <View style={[styles.avatar, { backgroundColor: theme.colors.surfaceHighlight }]}>
+          <View style={[styles.avatar, { backgroundColor: `${theme.colors.primary}18` }]}>
             <User size={16} color={theme.colors.primary} />
           </View>
 
@@ -388,6 +387,11 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRightWidth: 1,
     paddingVertical: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 12, height: 0 },
+    shadowOpacity: 0.16,
+    shadowRadius: 26,
+    elevation: 7,
   },
   header: {
     flexDirection: 'row',
@@ -420,7 +424,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 11,
     paddingHorizontal: 12,
-    borderRadius: 6,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   navLabel: {
     fontSize: 13,
@@ -436,14 +441,16 @@ const styles = StyleSheet.create({
   },
   statsWidget: {
     marginHorizontal: 18,
-    borderRadius: 6,
+    borderRadius: 16,
     padding: 14,
+    borderWidth: 1,
   },
   systemWidget: {
     marginHorizontal: 18,
     marginTop: 10,
-    borderRadius: 6,
+    borderRadius: 16,
     padding: 14,
+    borderWidth: 1,
   },
   statsTitle: {
     fontSize: 12,
@@ -501,7 +508,7 @@ const styles = StyleSheet.create({
   themeToggle: {
     minHeight: 44,
     borderWidth: 1,
-    borderRadius: 6,
+    borderRadius: 14,
     paddingLeft: 12,
     paddingRight: 8,
     marginBottom: 14,
@@ -526,7 +533,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,

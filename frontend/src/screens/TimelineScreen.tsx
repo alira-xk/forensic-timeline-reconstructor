@@ -24,13 +24,12 @@ import {
   Hash,
   Image,
   RefreshCcw,
-  Search,
   Star,
   Upload,
 } from 'lucide-react-native';
 
 import { ScreenWrapper } from '../components/ScreenWrapper';
-import { Input } from '../components/Input';
+import { SearchInput } from '../components/SearchInput';
 import { useTheme } from '../theme/ThemeContext';
 import { RootStackParamList, MainTabParamList } from '../types/navigation';
 import {
@@ -423,18 +422,11 @@ export const TimelineScreen: React.FC<Props> = ({ route, navigation }) => {
 
         <View style={styles.contentConstrainer}>
           <View style={styles.searchSection}>
-            <View style={styles.searchWrapper}>
-              <View style={styles.searchIcon}>
-                <Search size={16} color={theme.colors.text.secondary} />
-              </View>
-
-              <Input
-                placeholder="Search event type, file name, source, hash, or description..."
-                value={search}
-                onChangeText={setSearch}
-                style={styles.searchInput}
-              />
-            </View>
+            <SearchInput
+              placeholder="Search event type, file name, source, hash, or description..."
+              value={search}
+              onChangeText={setSearch}
+            />
 
             <ScrollView
               horizontal
@@ -565,7 +557,7 @@ const styles = StyleSheet.create({
   backButton: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -616,22 +608,9 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 12,
   },
-  searchWrapper: {
-    position: 'relative',
-    marginBottom: 12,
-  },
-  searchIcon: {
-    position: 'absolute',
-    left: 14,
-    top: 15,
-    zIndex: 2,
-  },
-  searchInput: {
-    marginBottom: 0,
-    paddingLeft: 38,
-  },
   filterContainer: {
     gap: 8,
+    marginTop: 12,
   },
   filterPill: {
     flexDirection: 'row',
@@ -729,7 +708,7 @@ const styles = StyleSheet.create({
   bookmarkButton: {
     width: 30,
     height: 30,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

@@ -17,6 +17,7 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   ArrowLeft,
   AlertTriangle,
@@ -60,13 +61,18 @@ import {
 } from '../services/caseService';
 import {
   EvidenceFile,
+  deleteEvidenceFile,
   getFileDownloadUrl,
   getFilePreviewUrl,
   getFilesByCase,
   getTextFilePreview,
   uploadEvidenceFiles,
 } from '../services/fileService';
-import { extractMetadataForCase } from '../services/extractionService';
+import {
+  extractMetadataForFile,
+  extractMetadataForCase,
+  getExtractionStatus,
+} from '../services/extractionService';
 import {
   getTimelineByCase,
   TimelineEvent,
@@ -118,6 +124,7 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const [buildingReport, setBuildingReport] = useState(false);
   const [generatingAiSummary, setGeneratingAiSummary] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletingFileId, setDeletingFileId] = useState('');
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isCustodyOpen, setIsCustodyOpen] = useState(false);
@@ -184,16 +191,35 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
     await loadCaseDetails(false);
   };
 
+  const waitForExtractionToFinish = async () => {
+    const maxAttempts = 20;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      const status = await getExtractionStatus(caseId);
+      await loadCaseDetails(false);
+
+      if (status.isComplete) {
+        if (status.failed > 0) {
+          Alert.alert(
+            'Extraction Finished',
+            `${status.processed} file(s) processed, ${status.failed} failed. Check the file status for details.`
+          );
+        }
+        return;
+      }
+    }
+
+    Alert.alert(
+      'Extraction Still Running',
+      'Metadata extraction is taking longer than usual. Use the refresh button in a moment.'
+    );
+  };
+
   const handleUpload = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'image/*',
-          'text/plain',
-        ],
+        type: '*/*',
         copyToCacheDirectory: true,
         multiple: true,
       });
@@ -235,6 +261,9 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
       );
 
       await loadCaseDetails(false);
+      if (result.status === 'processing' || result.filesQueued) {
+        await waitForExtractionToFinish();
+      }
     } catch (error: any) {
       Alert.alert('Extraction Failed', error.message || 'Failed to extract metadata.');
     } finally {
@@ -438,6 +467,57 @@ const handleDeleteCase = () => {
     }
   };
 
+  const handleDeleteEvidenceFile = (file: EvidenceFile, event?: any) => {
+    event?.stopPropagation?.();
+
+    (async () => {
+      const confirmed = await confirmDialog(
+        'Remove Evidence File',
+        `Remove "${file.originalName}" from this case? This will delete the stored file and its extracted timeline events.`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        setDeletingFileId(file._id);
+        await deleteEvidenceFile(file._id);
+        if (selectedFile?._id === file._id) {
+          setSelectedFile(null);
+          setSelectedFilePreviewUrl('');
+          setSelectedFileTextPreview('');
+          setSelectedFileNoteText('');
+        }
+        Alert.alert('Evidence Removed', `${file.originalName} was removed from this case.`);
+        await loadCaseDetails(false);
+      } catch (error: any) {
+        Alert.alert('Remove Failed', error.message || 'Failed to remove evidence file.');
+      } finally {
+        setDeletingFileId('');
+      }
+    })();
+  };
+
+  const handleReextractSelectedFile = async () => {
+    if (!selectedFile) {
+      return;
+    }
+
+    try {
+      setExtracting(true);
+      const fileName = selectedFile.originalName;
+      await extractMetadataForFile(selectedFile._id);
+      setSelectedFile(null);
+      Alert.alert('Re-extraction Started', `${fileName} is being extracted again.`);
+      await waitForExtractionToFinish();
+    } catch (error: any) {
+      Alert.alert('Re-extraction Failed', error.message || 'Failed to re-extract this file.');
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   const handleCreateSelectedFileNote = async () => {
     if (!selectedFile) {
       return;
@@ -593,14 +673,14 @@ const handleDeleteCase = () => {
       style={[
         styles.fileCard,
         {
-          backgroundColor: theme.colors.surface,
+          backgroundColor: theme.colors.panel,
           borderColor: theme.colors.border,
         },
       ]}
       onPress={() => handleOpenFileDetail(item)}
       activeOpacity={0.85}
     >
-      <View style={[styles.fileIcon, { backgroundColor: theme.colors.surfaceHighlight }]}>
+      <View style={[styles.fileIcon, { backgroundColor: `${theme.colors.primary}18` }]}>
         <File size={22} color={theme.colors.primary} />
       </View>
 
@@ -624,6 +704,25 @@ const handleDeleteCase = () => {
               {item.status}
             </Text>
           </View>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            disabled={deletingFileId === item._id}
+            onPress={(event) => handleDeleteEvidenceFile(item, event)}
+            style={[
+              styles.fileRemoveButton,
+              {
+                borderColor: `${theme.colors.status.error}55`,
+                backgroundColor: `${theme.colors.status.error}12`,
+              },
+            ]}
+          >
+            {deletingFileId === item._id ? (
+              <ActivityIndicator size="small" color={theme.colors.status.error} />
+            ) : (
+              <Trash2 size={15} color={theme.colors.status.error} />
+            )}
+          </TouchableOpacity>
         </View>
 
               <Text style={[styles.fileMeta, { color: theme.colors.text.secondary }]}>
@@ -650,10 +749,17 @@ const handleDeleteCase = () => {
   );
 
   const renderCustodyEntry = ({ item }: { item: ChainOfCustodyEntry }) => {
+    const detailFiles = Array.isArray(item.details?.files) ? item.details.files : [];
     const hash =
       item.details?.sha256Hash ||
-      item.details?.files?.find((file) => file.sha256Hash)?.sha256Hash ||
+      detailFiles.find((file) => file?.sha256Hash)?.sha256Hash ||
       '';
+    const actorName =
+      typeof item.actor === 'object' && item.actor
+        ? item.actor.name || item.actor.email
+        : '';
+    const label = String(item.label || item.action || 'Custody event');
+    const summary = String(item.summary || 'Custody record captured.');
 
     return (
       <View style={styles.custodyRow}>
@@ -688,7 +794,7 @@ const handleDeleteCase = () => {
           <View style={styles.custodyTitleRow}>
             <View style={styles.custodyTitleGroup}>
               <Text style={[styles.custodyLabel, { color: theme.colors.text.primary }]}>
-                {item.label}
+                {label}
               </Text>
               <Text style={[styles.custodyTime, { color: theme.colors.text.secondary }]}>
                 {formatDateTime(item.createdAt)}
@@ -721,17 +827,17 @@ const handleDeleteCase = () => {
           </View>
 
           <Text style={[styles.custodySummary, { color: theme.colors.text.secondary }]}>
-            {item.summary}
+            {summary}
           </Text>
 
           <View style={styles.custodyMetaGrid}>
             <Text style={[styles.custodyMeta, { color: theme.colors.text.muted }]}>
-              Actor: {item.actor?.name || item.actor?.email || 'System'}
+              Actor: {actorName || 'System'}
             </Text>
 
             {item.fileName ? (
               <Text style={[styles.custodyMeta, { color: theme.colors.text.muted }]}>
-                File: {item.fileName}
+                File: {String(item.fileName)}
               </Text>
             ) : null}
 
@@ -754,7 +860,7 @@ const handleDeleteCase = () => {
       style={[
         styles.noteCard,
         {
-          backgroundColor: theme.colors.surface,
+          backgroundColor: theme.colors.panel,
           borderColor: theme.colors.border,
         },
       ]}
@@ -862,12 +968,44 @@ const handleDeleteCase = () => {
                   <View style={styles.fileDetailActions}>
                     <TouchableOpacity
                       activeOpacity={0.85}
+                      onPress={handleReextractSelectedFile}
+                      disabled={extracting}
+                      style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
+                    >
+                      {extracting ? (
+                        <ActivityIndicator color={theme.colors.text.primary} />
+                      ) : (
+                        <RefreshCcw size={16} color={theme.colors.text.primary} />
+                      )}
+                      <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
+                        Re-extract
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.85}
                       onPress={handleDownloadSelectedFile}
                       style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
                     >
                       <Download size={16} color={theme.colors.text.primary} />
                       <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
                         Download
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => handleDeleteEvidenceFile(selectedFile)}
+                      disabled={deletingFileId === selectedFile._id}
+                      style={[styles.dangerButton, { borderColor: `${theme.colors.status.error}66` }]}
+                    >
+                      {deletingFileId === selectedFile._id ? (
+                        <ActivityIndicator color={theme.colors.status.error} />
+                      ) : (
+                        <Trash2 size={16} color={theme.colors.status.error} />
+                      )}
+                      <Text style={[styles.dangerButtonText, { color: theme.colors.status.error }]}>
+                        Remove File
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1032,8 +1170,13 @@ const handleDeleteCase = () => {
             </Text>
           </TouchableOpacity>
 
-          <View style={styles.header}>
-            <View style={[styles.headerIcon, { backgroundColor: theme.colors.surfaceHighlight }]}>
+          <LinearGradient
+            colors={theme.dark ? ['#111C2C', '#0C121A'] : ['#FFFFFF', '#ECF4FF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.header, { borderColor: theme.colors.border }]}
+          >
+            <View style={[styles.headerIcon, { backgroundColor: `${theme.colors.primary}18` }]}>
               <FolderOpen size={28} color={theme.colors.primary} />
             </View>
 
@@ -1061,7 +1204,7 @@ const handleDeleteCase = () => {
                 </Text>
               </View>
             </View>
-          </View>
+          </LinearGradient>
 
           <View style={styles.statsGrid}>
             {renderStatCard(
@@ -1781,7 +1924,7 @@ const styles = StyleSheet.create({
   headerIcon: {
     width: 58,
     height: 58,
-    borderRadius: 8,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -1832,7 +1975,7 @@ const styles = StyleSheet.create({
   statIconBox: {
     width: 38,
     height: 38,
-    borderRadius: 6,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
@@ -1850,7 +1993,7 @@ const styles = StyleSheet.create({
   },
   actionPanel: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 20,
     marginBottom: 26,
   },
@@ -1871,7 +2014,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     minHeight: 46,
-    borderRadius: 6,
+    borderRadius: 12,
     paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1885,7 +2028,7 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     minHeight: 46,
-    borderRadius: 6,
+    borderRadius: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
     alignItems: 'center',
@@ -1899,7 +2042,7 @@ const styles = StyleSheet.create({
   },
   dangerButton: {
     minHeight: 46,
-    borderRadius: 6,
+    borderRadius: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
     alignItems: 'center',
@@ -1914,7 +2057,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 46,
     height: 46,
-    borderRadius: 6,
+    borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1928,7 +2071,7 @@ const styles = StyleSheet.create({
   },
   fileCard: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1936,7 +2079,7 @@ const styles = StyleSheet.create({
   fileIcon: {
     width: 44,
     height: 44,
-    borderRadius: 6,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
@@ -1973,9 +2116,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    borderRadius: 6,
+    borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 4,
+  },
+  fileRemoveButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusText: {
     fontSize: 10,
@@ -1988,31 +2139,31 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 28,
     alignItems: 'center',
   },
   custodyTogglePanel: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 16,
     marginTop: 2,
   },
   notesTogglePanel: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 16,
     marginBottom: 14,
   },
   aiTogglePanel: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 16,
     marginBottom: 14,
   },
   aiPanel: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 16,
     marginBottom: 28,
   },
@@ -2049,7 +2200,7 @@ const styles = StyleSheet.create({
   },
   aiFindingCard: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 12,
     marginBottom: 9,
   },
@@ -2077,7 +2228,7 @@ const styles = StyleSheet.create({
   },
   regenerateAiButton: {
     minHeight: 42,
-    borderRadius: 6,
+    borderRadius: 12,
     paddingHorizontal: 14,
     borderWidth: 1,
     alignItems: 'center',
@@ -2093,13 +2244,13 @@ const styles = StyleSheet.create({
   },
   noteComposer: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 14,
   },
   noteInput: {
     minHeight: 86,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 12,
     fontSize: 13,
     lineHeight: 19,
@@ -2121,7 +2272,7 @@ const styles = StyleSheet.create({
   },
   addNoteButton: {
     minHeight: 42,
-    borderRadius: 6,
+    borderRadius: 12,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2136,7 +2287,7 @@ const styles = StyleSheet.create({
   },
   bookmarkPanel: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 14,
   },
   bookmarkPanelHeader: {
@@ -2163,7 +2314,7 @@ const styles = StyleSheet.create({
   unstarButton: {
     width: 30,
     height: 30,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2173,7 +2324,7 @@ const styles = StyleSheet.create({
   },
   noteCard: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 14,
   },
   noteHeader: {
@@ -2206,7 +2357,7 @@ const styles = StyleSheet.create({
   noteDeleteButton: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2229,7 +2380,7 @@ const styles = StyleSheet.create({
   custodyIconBox: {
     width: 42,
     height: 42,
-    borderRadius: 6,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2253,7 +2404,7 @@ const styles = StyleSheet.create({
   custodyCard: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 15,
   },
   custodyTitleRow: {
@@ -2333,7 +2484,7 @@ const styles = StyleSheet.create({
     maxWidth: 860,
     maxHeight: '88%',
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 18,
   },
   modalHeader: {
@@ -2345,7 +2496,7 @@ const styles = StyleSheet.create({
   modalCloseButton: {
     width: 38,
     height: 38,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2364,7 +2515,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 150,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 12,
   },
   detailLabel: {
@@ -2379,7 +2530,7 @@ const styles = StyleSheet.create({
   },
   detailHashBlock: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 12,
     marginTop: 10,
   },
@@ -2397,7 +2548,7 @@ const styles = StyleSheet.create({
   previewBox: {
     minHeight: 160,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2418,7 +2569,7 @@ const styles = StyleSheet.create({
   },
   relatedItem: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 11,
     marginBottom: 8,
   },
@@ -2433,14 +2584,14 @@ const styles = StyleSheet.create({
   },
   fileNoteComposer: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 12,
     marginBottom: 12,
   },
   fileNoteInput: {
     minHeight: 74,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 10,
     fontSize: 13,
     lineHeight: 19,

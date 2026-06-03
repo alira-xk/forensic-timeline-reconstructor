@@ -11,32 +11,38 @@ const logger = require('../utils/logger');
 
 let openaiClient;
 let groqClient;
+let openaiClientKey;
+let groqClientKey;
 
 const getAiProvider = () => String(process.env.AI_PROVIDER || 'openai').trim().toLowerCase();
 
 const getOpenAIClient = () => {
-  if (!process.env.OPENAI_API_KEY) {
+  const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
+  if (!apiKey) {
     return null;
   }
 
-  if (!openaiClient) {
+  if (!openaiClient || openaiClientKey !== apiKey) {
     openaiClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey,
     });
+    openaiClientKey = apiKey;
   }
 
   return openaiClient;
 };
 
 const getGroqClient = () => {
-  if (!process.env.GROQ_API_KEY) {
+  const apiKey = String(process.env.GROQ_API_KEY || '').trim();
+  if (!apiKey) {
     return null;
   }
 
-  if (!groqClient) {
+  if (!groqClient || groqClientKey !== apiKey) {
     groqClient = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
+      apiKey,
     });
+    groqClientKey = apiKey;
   }
 
   return groqClient;
@@ -47,68 +53,104 @@ const truncate = (value = '', maxLength = 900) => {
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 };
 
+const getAiPayloadLimits = () => ({
+  files: Number(process.env.AI_MAX_FILES || 12),
+  events: Number(process.env.AI_MAX_EVENTS || 35),
+  notes: Number(process.env.AI_MAX_NOTES || 12),
+  custody: Number(process.env.AI_MAX_CUSTODY_LOGS || 15),
+});
+
+const pickImportantEvents = (events, maxEvents) => {
+  const bookmarked = events.filter((event) => event.isBookmarked);
+  const errorsOrConcerns = events.filter((event) => (
+    /error|failed|missing|unknown|modified|deleted|created/i.test(
+      `${event.eventType || ''} ${event.title || ''} ${event.description || ''}`
+    )
+  ));
+  const recent = events.slice(-maxEvents);
+
+  const seen = new Set();
+  return [...bookmarked, ...errorsOrConcerns, ...recent]
+    .filter((event) => {
+      const id = event._id.toString();
+      if (seen.has(id)) {
+        return false;
+      }
+      seen.add(id);
+      return true;
+    })
+    .slice(0, maxEvents);
+};
+
 const compactCasePayload = ({ caseData, files, events, notes, custodyLogs }) => ({
-  case: {
-    id: caseData._id.toString(),
-    title: caseData.title,
-    caseNumber: caseData.caseNumber,
-    status: caseData.status,
-    priority: caseData.priority,
-    category: caseData.category,
-    description: truncate(caseData.description, 800),
-    createdAt: caseData.createdAt,
-    updatedAt: caseData.updatedAt,
-  },
-  files: files.slice(0, 40).map((file) => ({
-    id: file._id.toString(),
-    name: file.originalName,
-    type: file.fileType,
-    mimeType: file.mimeType,
-    size: file.fileSize,
-    sha256Hash: file.sha256Hash,
-    status: file.status,
-    errorReason: truncate(file.errorReason, 300),
-    eventsExtracted: file.eventsExtracted,
-    uploadedAt: file.createdAt,
-  })),
-  timelineEvents: events.slice(0, 120).map((event) => ({
-    id: event._id.toString(),
-    timestamp: event.timestamp,
-    originalTimestamp: event.originalTimestamp,
-    eventType: event.eventType,
-    eventSource: event.eventSource,
-    title: event.title,
-    description: truncate(event.description, 500),
-    confidence: event.confidence,
-    isBookmarked: event.isBookmarked,
-    sourceFile: event.fileRecord?.originalName || '',
-    metadata: event.metadata || {},
-  })),
-  notes: notes.slice(0, 40).map((note) => ({
-    id: note._id.toString(),
-    findingType: note.findingType,
-    body: truncate(note.body, 700),
-    tags: note.tags || [],
-    createdAt: note.createdAt,
-    sourceFile: note.fileRecord?.originalName || '',
-    eventTitle: note.event?.title || '',
-  })),
-  custody: custodyLogs.slice(-50).map((log) => ({
-    action: log.action,
-    success: log.success,
-    createdAt: log.createdAt,
-    actor: log.user?.name || log.user?.email || 'System',
-    resource: log.resource,
-    details: log.details || {},
-  })),
-  limits: {
-    filesIncluded: Math.min(files.length, 40),
-    totalFiles: files.length,
-    eventsIncluded: Math.min(events.length, 120),
-    totalEvents: events.length,
-    notesIncluded: Math.min(notes.length, 40),
-    totalNotes: notes.length,
-  },
+  ...(() => {
+    const limits = getAiPayloadLimits();
+    const selectedEvents = pickImportantEvents(events, limits.events);
+    const selectedFiles = files
+      .filter((file) => file.status !== 'extracted' || file.eventsExtracted || selectedEvents.some((event) => (
+        event.fileRecord?._id?.toString?.() === file._id.toString() ||
+        event.fileRecord?.toString?.() === file._id.toString()
+      )))
+      .slice(0, limits.files);
+
+    return {
+      case: {
+        title: caseData.title,
+        caseNumber: caseData.caseNumber,
+        status: caseData.status,
+        priority: caseData.priority,
+        category: caseData.category,
+        description: truncate(caseData.description, 350),
+        createdAt: caseData.createdAt,
+      },
+      evidenceStats: {
+        totalFiles: files.length,
+        totalEvents: events.length,
+        totalNotes: notes.length,
+        totalCustodyLogs: custodyLogs.length,
+      },
+      files: selectedFiles.map((file) => ({
+        name: file.originalName,
+        type: file.fileType,
+        size: file.fileSize,
+        status: file.status,
+        errorReason: truncate(file.errorReason, 120),
+        eventsExtracted: file.eventsExtracted,
+      })),
+      timelineEvents: selectedEvents.map((event) => ({
+        timestamp: event.timestamp,
+        eventType: event.eventType,
+        source: event.eventSource,
+        title: truncate(event.title, 90),
+        description: truncate(event.description, 180),
+        bookmarked: Boolean(event.isBookmarked),
+        sourceFile: event.fileRecord?.originalName || '',
+      })),
+      notes: notes.slice(0, limits.notes).map((note) => ({
+        type: note.findingType,
+        body: truncate(note.body, 220),
+        tags: (note.tags || []).slice(0, 5),
+        sourceFile: note.fileRecord?.originalName || '',
+      })),
+      custody: custodyLogs.slice(-limits.custody).map((log) => ({
+        action: log.action,
+        success: log.success,
+        createdAt: log.createdAt,
+        actor: log.user?.name || log.user?.email || 'System',
+        resource: log.resource,
+      })),
+      limits: {
+        filesIncluded: selectedFiles.length,
+        totalFiles: files.length,
+        eventsIncluded: selectedEvents.length,
+        totalEvents: events.length,
+        notesIncluded: Math.min(notes.length, limits.notes),
+        totalNotes: notes.length,
+        custodyIncluded: Math.min(custodyLogs.length, limits.custody),
+        totalCustodyLogs: custodyLogs.length,
+      },
+    };
+  })(),
 });
 
 const parseAiJson = (text) => {
@@ -204,6 +246,7 @@ const generateWithGroq = async (payload) => {
   const response = await client.chat.completions.create({
     model,
     temperature: 0.2,
+    max_tokens: Number(process.env.AI_MAX_OUTPUT_TOKENS || 900),
     response_format: { type: 'json_object' },
     messages: [
       {
@@ -320,6 +363,7 @@ exports.generateCaseSummary = async (req, res, next) => {
     });
 
     if (err?.status || err?.code) {
+      const providerName = getAiProvider() === 'groq' ? 'Groq' : 'OpenAI';
       const connectionHint =
         err.code === 'ECONNRESET' ||
         err.code === 'ETIMEDOUT' ||
@@ -328,16 +372,26 @@ exports.generateCaseSummary = async (req, res, next) => {
       const quotaHint =
         err.status === 429 ||
         err.code === 'insufficient_quota';
+      const tokenLimitHint =
+        err.status === 413 ||
+        err.code === 'rate_limit_exceeded';
+      const invalidKeyHint =
+        err.status === 401 ||
+        err.code === 'invalid_api_key';
       const missingConfigHint = err.code === 'AI_NOT_CONFIGURED';
 
       return errorResponse(
         res,
         missingConfigHint
           ? err.message
+          : invalidKeyHint
+          ? `${providerName} API key is invalid or was not loaded by the running backend. Update forensic-backend/.env, then fully stop and restart npm run dev.`
+          : tokenLimitHint
+          ? `${providerName} token limit was reached. The app has reduced the AI payload; restart the backend and try again. If it still happens, lower AI_MAX_EVENTS in forensic-backend/.env.`
           : quotaHint
-          ? 'OpenAI quota is unavailable for this API key. Check billing/credits on your OpenAI account, then try again.'
+          ? `${providerName} quota or rate limit is unavailable for this API key. Check your provider account, then try again.`
           : connectionHint
-          ? 'Could not connect to OpenAI. Check your internet/VPN/firewall, then try again.'
+          ? `Could not connect to ${providerName}. Check your internet/VPN/firewall, then try again.`
           : err.message || 'AI request failed.',
         err.status || 502,
         'AI_REQUEST_FAILED'

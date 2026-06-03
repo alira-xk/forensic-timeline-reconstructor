@@ -27,12 +27,12 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ visible, onClose, 
             <Pressable style={styles.overlay} onPress={onClose}>
                 <Card style={[
                     styles.popup,
-                    { backgroundColor: theme.colors.surfaceHighlight, borderColor: theme.colors.border },
+                    { backgroundColor: theme.colors.panelStrong, borderColor: theme.colors.border },
                     anchorPosition ? anchorPosition : { bottom: 80, left: 80 } // Default for Sidebar bottom-left
                 ]}>
                     <View style={styles.header}>
-                        <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
-                            <User size={16} color="#FFF" />
+                        <View style={[styles.avatar, { backgroundColor: `${theme.colors.primary}18` }]}>
+                            <User size={16} color={theme.colors.primary} />
                         </View>
                         <View>
                             <Text style={[styles.name, { color: theme.colors.text.primary }]} numberOfLines={1}>
@@ -75,13 +75,13 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ visible, onClose, 
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'transparent', // Light click-away overlay
+        backgroundColor: 'transparent',
     },
     popup: {
         position: 'absolute',
-        width: 240,
-        padding: 16,
-        borderRadius: 12,
+        width: 270,
+        padding: 18,
+        borderRadius: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     avatar: {
         width: 32,
         height: 32,
-        borderRadius: 16,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -125,6 +125,6 @@ const styles = StyleSheet.create({
     },
     label: {
         fontSize: 13,
-        fontWeight: '500',
+        fontWeight: '700',
     }
 });

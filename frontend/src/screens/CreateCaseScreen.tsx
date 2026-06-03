@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -13,6 +11,9 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronLeft, FolderPlus } from 'lucide-react-native';
 
 import { ScreenWrapper } from '../components/ScreenWrapper';
+import { Button } from '../components/Button';
+import { Card } from '../components/Card';
+import { Input } from '../components/Input';
 import { useTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../types/navigation';
 import { createCase } from '../services/caseService';
@@ -83,15 +84,7 @@ export const CreateCaseScreen: React.FC<Props> = ({ navigation }) => {
             </View>
           </View>
 
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          >
+          <Card style={styles.card}>
             <Text style={[styles.cardTitle, { color: theme.colors.text.primary }]}>
               Case Information
             </Text>
@@ -101,76 +94,40 @@ export const CreateCaseScreen: React.FC<Props> = ({ navigation }) => {
               metadata extraction, and timeline reconstruction.
             </Text>
 
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: theme.colors.text.secondary }]}>
-                CASE TITLE
-              </Text>
+            <Input
+              label="CASE TITLE"
+              value={title}
+              onChangeText={setTitle}
+              placeholder="e.g. Suspicious Login Investigation"
+            />
 
-              <TextInput
-                value={title}
-                onChangeText={setTitle}
-                placeholder="e.g. Suspicious Login Investigation"
-                placeholderTextColor={theme.colors.text.secondary}
-                style={[
-                  styles.input,
-                  {
-                    color: theme.colors.text.primary,
-                    backgroundColor: theme.colors.background,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-              />
-            </View>
-
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: theme.colors.text.secondary }]}>
-                CASE DESCRIPTION
-              </Text>
-
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Write a short description about this investigation..."
-                placeholderTextColor={theme.colors.text.secondary}
-                multiline
-                textAlignVertical="top"
-                style={[
-                  styles.textArea,
-                  {
-                    color: theme.colors.text.primary,
-                    backgroundColor: theme.colors.background,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-              />
-            </View>
+            <Input
+              label="CASE DESCRIPTION"
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Write a short description about this investigation..."
+              multiline
+              textAlignVertical="top"
+              style={styles.textArea}
+            />
 
             <View style={styles.actions}>
-              <TouchableOpacity
-                style={[styles.cancelButton, { borderColor: theme.colors.border }]}
+              <Button
+                title="Cancel"
+                variant="secondary"
                 onPress={() => navigation.goBack()}
                 disabled={loading}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.cancelText, { color: theme.colors.text.primary }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
+                style={styles.actionButton}
+              />
 
-              <TouchableOpacity
-                style={[styles.createButton, { backgroundColor: theme.colors.primary }]}
+              <Button
+                title="Create Case"
                 onPress={handleCreateCase}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.createText}>Create Case</Text>
-                )}
-              </TouchableOpacity>
+                isLoading={loading}
+                style={styles.actionButton}
+              />
             </View>
-          </View>
+          </Card>
         </ScrollView>
       </View>
     </ScreenWrapper>
@@ -227,7 +184,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderWidth: 1,
-    borderRadius: 22,
+    borderRadius: 20,
     padding: 24,
   },
   cardTitle: {
@@ -240,29 +197,8 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginBottom: 24,
   },
-  field: {
-    marginBottom: 18,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 14,
-  },
   textArea: {
     minHeight: 130,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 14,
     lineHeight: 20,
   },
   actions: {
@@ -271,26 +207,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     gap: 12,
   },
-  cancelButton: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 13,
-  },
-  cancelText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  createButton: {
-    borderRadius: 14,
-    paddingHorizontal: 22,
-    paddingVertical: 13,
+  actionButton: {
     minWidth: 140,
-    alignItems: 'center',
-  },
-  createText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
   },
 });

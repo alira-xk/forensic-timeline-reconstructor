@@ -27,8 +27,8 @@ export const Card: React.FC<CardProps> = ({ children, style }) => {
 
 const styles = StyleSheet.create({
     container: {
-        borderRadius: 6,
-        padding: 16,
+        borderRadius: 16,
+        padding: 18,
         marginBottom: 16,
         borderWidth: 1,
     },

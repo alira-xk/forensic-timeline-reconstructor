@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -26,17 +25,20 @@ export const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const submit = async () => {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
-      Alert.alert('Validation Error', 'Email is required.');
+      setMessage('');
+      setErrorMessage('Email is required.');
       return;
     }
 
     try {
       setIsLoading(true);
       setMessage('');
+      setErrorMessage('');
 
       const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
         method: 'POST',
@@ -57,7 +59,8 @@ export const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
       }
       navigation.navigate('ResetPassword', { email: cleanEmail });
     } catch (error: any) {
-      Alert.alert('Request Failed', error.message || 'Unable to request reset token.');
+      setMessage('');
+      setErrorMessage(error.message || 'Unable to request reset code.');
     } finally {
       setIsLoading(false);
     }
@@ -91,10 +94,20 @@ export const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
               label="Email Address"
               placeholder="Enter registered email"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(value) => {
+                setEmail(value);
+                setErrorMessage('');
+                setMessage('');
+              }}
               autoCapitalize="none"
               keyboardType="email-address"
             />
+
+            {errorMessage ? (
+              <View style={[styles.messageBox, { backgroundColor: `${theme.colors.status.error}12`, borderColor: theme.colors.status.error }]}>
+                <Text style={[styles.messageText, { color: theme.colors.status.error }]}>{errorMessage}</Text>
+              </View>
+            ) : null}
 
             {message ? (
               <View style={[styles.messageBox, { backgroundColor: `${theme.colors.status.success}12`, borderColor: theme.colors.status.success }]}>

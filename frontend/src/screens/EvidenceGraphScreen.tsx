@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
   refreshButton: {
     width: 36,
     height: 36,
-    borderRadius: 6,
+    borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
   },
   focusCard: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 10,
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
   legendSwatch: {
     width: 12,
     height: 12,
-    borderRadius: 6,
+    borderRadius: 12,
   },
   legendText: {
     fontSize: 12,
@@ -529,7 +529,7 @@ const styles = StyleSheet.create({
   },
   canvasShell: {
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 18,
     overflow: 'hidden',
   },
   centerState: {

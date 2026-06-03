@@ -1,30 +1,48 @@
 const nodemailer = require('nodemailer');
 
+const getEmailConfig = () => ({
+  host: process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || '465', 10),
+  secure: (process.env.SMTP_SECURE || process.env.EMAIL_SECURE || 'true') === 'true',
+  user: process.env.SMTP_USER || process.env.EMAIL_USER || '',
+  pass: process.env.SMTP_PASS || process.env.EMAIL_PASS || '',
+  from: process.env.SMTP_FROM || process.env.EMAIL_FROM || '',
+  fromName: process.env.EMAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'Forensic Timeline',
+});
+
 const buildTransporter = () => {
-  const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
-  const port = parseInt(process.env.EMAIL_PORT || '465');
-  const secure = (process.env.EMAIL_SECURE || 'true') === 'true';
+  const config = getEmailConfig();
+
+  if (!config.user || !config.pass) {
+    const error = new Error(
+      'Email SMTP credentials are missing. Set DEV_EMAIL_LOG=true for local testing, or configure SMTP_USER and SMTP_PASS in forensic-backend/.env.'
+    );
+    error.code = 'EMAIL_NOT_CONFIGURED';
+    throw error;
+  }
 
   return nodemailer.createTransport({
-    host,
-    port,
-    secure,
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user: config.user,
+      pass: config.pass,
     },
   });
 };
 
 const getFromAddress = () => {
-  if (process.env.EMAIL_FROM && process.env.EMAIL_FROM.includes('@')) {
-    return process.env.EMAIL_FROM;
+  const config = getEmailConfig();
+  if (config.from && config.from.includes('@')) {
+    return config.from;
   }
-  return process.env.EMAIL_USER || 'no-reply@forensic.local';
+  return config.user || 'no-reply@forensic.local';
 };
 
 const getFromName = () => {
-  return process.env.EMAIL_FROM_NAME || process.env.EMAIL_FROM || 'Forensic Timeline';
+  const config = getEmailConfig();
+  return config.fromName || config.from || 'Forensic Timeline';
 };
 
 const sendPasswordResetEmail = async (to, token) => {

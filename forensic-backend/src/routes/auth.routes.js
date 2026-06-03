@@ -44,6 +44,7 @@ router.post(
 router.post(
   '/reset-password',
   [
+    body('email').optional().isEmail().withMessage('Valid email is required'),
     body('token').notEmpty().withMessage('Reset token is required'),
     body('token').isLength({ min: 6, max: 6 }).withMessage('Reset code must be 6 digits'),
     body('newPassword').matches(strongPasswordRegex).withMessage(strongPasswordMessage),

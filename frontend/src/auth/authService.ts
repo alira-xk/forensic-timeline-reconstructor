@@ -71,8 +71,9 @@ const getSession = async (): Promise<AuthUser | null> => {
 
 const login = async (email: string, password: string): Promise<AuthResult> => {
   const cleanEmail = email.trim().toLowerCase();
+  const cleanPassword = password.trim();
 
-  if (!cleanEmail || !password.trim()) {
+  if (!cleanEmail || !cleanPassword) {
     return {
       success: false,
       code: 'missing_fields',
@@ -88,7 +89,7 @@ const login = async (email: string, password: string): Promise<AuthResult> => {
       },
       body: JSON.stringify({
         email: cleanEmail,
-        password,
+        password: cleanPassword,
       }),
     });
 

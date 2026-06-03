@@ -1,6 +1,7 @@
 const FileRecord = require('../models/FileRecord');
 const Case = require('../models/Case');
 const Event = require('../models/Event');
+const InvestigationNote = require('../models/InvestigationNote');
 const { successResponse, errorResponse, paginatedResponse } = require('../utils/response');
 const { logAudit, AUDIT_ACTIONS } = require('../utils/auditLogger');
 const fs = require('fs');
@@ -134,8 +135,9 @@ exports.deleteFile = async (req, res, next) => {
       // Non-blocking
     }
 
-    // Delete related events
+    // Delete related timeline events and file-scoped notes.
     await Event.deleteMany({ fileRecord: file._id });
+    const deletedNotes = await InvestigationNote.deleteMany({ fileRecord: file._id });
 
     // Delete file record
     await FileRecord.findByIdAndDelete(file._id);
@@ -154,6 +156,7 @@ exports.deleteFile = async (req, res, next) => {
       fileId: file._id.toString(),
       originalName: file.originalName,
       sha256Hash: file.sha256Hash,
+      notesDeleted: deletedNotes.deletedCount || 0,
     }, req.ip);
 
     return successResponse(res, 'File deleted.');

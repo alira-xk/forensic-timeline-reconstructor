@@ -10,6 +10,7 @@ const Case = require('../models/Case');
 const BASE_DIR = path.resolve(__dirname, '../..');
 const UPLOAD_DIR = path.resolve(BASE_DIR, process.env.UPLOAD_DIR || 'uploads');
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 52428800; // 50MB
+const MAX_FILES_PER_UPLOAD = parseInt(process.env.MAX_FILES_PER_UPLOAD, 10) || 100;
 
 const ALLOWED_MIMES = [
   'application/msword', // doc
@@ -30,11 +31,12 @@ const ALLOWED_MIMES = [
 
 const getFileType = (mimetype, originalname) => {
   const ext = path.extname(originalname).toLowerCase();
+  if (ext === '.log' || ext === '.txt' || ext === '.csv') return 'log';
   if (ext === '.doc' || mimetype === 'application/msword' || mimetype === 'application/vnd.ms-word') return 'doc';
   if (ext === '.docx' || mimetype.includes('wordprocessingml')) return 'docx';
   if (ext === '.pdf' || mimetype === 'application/pdf') return 'pdf';
   if (mimetype.startsWith('image/')) return 'image';
-  if (ext === '.log' || ext === '.txt' || mimetype.startsWith('text/')) return 'log';
+  if (mimetype.startsWith('text/')) return 'log';
   return 'unknown';
 };
 
@@ -87,7 +89,10 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: MAX_FILE_SIZE },
+  limits: {
+    fileSize: MAX_FILE_SIZE,
+    files: MAX_FILES_PER_UPLOAD,
+  },
 });
 
 const computeSha256 = async (req, res, next) => {
@@ -147,10 +152,21 @@ const handleUploadErrors = (err, req, res, next) => {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return errorResponse(res, `File is too large. Maximum size is ${Math.round(MAX_FILE_SIZE / 1024 / 1024)} MB.`, 413);
     }
+    if (err.code === 'LIMIT_FILE_COUNT') {
+      return errorResponse(res, `Too many files selected. Upload up to ${MAX_FILES_PER_UPLOAD} files at once.`, 413);
+    }
     return errorResponse(res, err.message || 'File upload failed.', 400);
   }
 
   return errorResponse(res, err.message || 'File upload failed.', 400);
 };
 
-module.exports = { upload, computeSha256, ensureCaseUploadAccess, handleUploadErrors, getFileType, UPLOAD_DIR };
+module.exports = {
+  upload,
+  computeSha256,
+  ensureCaseUploadAccess,
+  handleUploadErrors,
+  getFileType,
+  UPLOAD_DIR,
+  MAX_FILES_PER_UPLOAD,
+};

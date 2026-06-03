@@ -3,6 +3,7 @@ import { View, StyleSheet, ViewStyle, StatusBar, Platform, useWindowDimensions, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { Sidebar } from './Sidebar';
+import { DynamicBackdrop } from './DynamicBackdrop';
 
 interface ScreenWrapperProps {
     children: React.ReactNode;
@@ -10,6 +11,7 @@ interface ScreenWrapperProps {
     withSafeArea?: boolean;
     fullWidth?: boolean;
     withSidebar?: boolean; // New prop to enable sidebar on authenticated screens
+    backgroundTreatment?: 'none' | 'quiet' | 'cinematic';
 }
 
 // 1024 is the max width for CONTENT.
@@ -22,6 +24,7 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
     withSafeArea = true,
     fullWidth = false,
     withSidebar = false, // Default to false so Login doesn't get it automatically unless specified
+    backgroundTreatment,
 }) => {
     const { theme } = useTheme();
     const { width } = useWindowDimensions();
@@ -29,9 +32,11 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
     const showSidebar = isWeb && withSidebar;
 
     const Container = withSafeArea && !showSidebar ? SafeAreaView : View;
+    const backdropIntensity = backgroundTreatment || (withSidebar ? 'quiet' : 'cinematic');
 
     return (
         <View style={[styles.mainLayout, { backgroundColor: theme.colors.background }]}>
+            {backdropIntensity !== 'none' ? <DynamicBackdrop intensity={backdropIntensity} /> : null}
             <StatusBar
                 barStyle={theme.dark ? 'light-content' : 'dark-content'}
                 backgroundColor={theme.colors.background}
@@ -43,14 +48,10 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
             <Container style={[styles.container]}>
                 <View style={[
                     styles.webCentering,
-                    // If sidebar is present, we don't center vertically the same way, we just let it flow
                     showSidebar && styles.webWithSidebar
                 ]}>
                     <View style={[
                         styles.contentContainer,
-                        // Logic: If on Web & NOT fullWidth & NO Sidebar -> constrain width (e.g. Login)
-                        // If Sidebar is present -> let it fill the remaining space but maybe max out?
-                        // Let's keep it simple: MaxWidth applies to the content block.
                         { maxWidth: isWeb && !fullWidth ? CONTENT_MAX_WIDTH : '100%' },
                         style
                     ]}>
@@ -76,7 +77,7 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     webWithSidebar: {
-        alignItems: 'stretch', // Fill height/width when sidebar is there
+        alignItems: 'center',
         paddingHorizontal: 0,
     },
     contentContainer: {

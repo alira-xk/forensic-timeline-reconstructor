@@ -19,12 +19,11 @@ import {
   Folder,
   FolderPlus,
   RefreshCcw,
-  Search,
 } from 'lucide-react-native';
 
 import { ScreenWrapper } from '../components/ScreenWrapper';
-import { Input } from '../components/Input';
 import { Card } from '../components/Card';
+import { SearchInput } from '../components/SearchInput';
 import { useTheme } from '../theme/ThemeContext';
 import { RootStackParamList, MainTabParamList } from '../types/navigation';
 import { getCases, CaseItem } from '../services/caseService';
@@ -199,18 +198,11 @@ export const CasesListScreen: React.FC<Props> = ({ navigation }) => {
         </View>
 
         <View style={[styles.controlsContainer, { borderBottomColor: theme.colors.border }]}>
-          <View style={styles.searchWrapper}>
-            <View style={styles.searchIcon}>
-              <Search size={16} color={theme.colors.text.secondary} />
-            </View>
-
-            <Input
-              placeholder="Search by title, description, status, or case ID..."
-              value={search}
-              onChangeText={setSearch}
-              style={styles.searchBar}
-            />
-          </View>
+          <SearchInput
+            placeholder="Search by title, description, status, or case ID..."
+            value={search}
+            onChangeText={setSearch}
+          />
 
           <ScrollView
             horizontal
@@ -331,7 +323,7 @@ const styles = StyleSheet.create({
   headerIcon: {
     width: 46,
     height: 46,
-    borderRadius: 8,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -355,7 +347,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 6,
+    borderRadius: 14,
   },
   createButtonLarge: {
     flexDirection: 'row',
@@ -363,7 +355,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 18,
     paddingVertical: 13,
-    borderRadius: 6,
+    borderRadius: 14,
     marginTop: 18,
   },
   createButtonText: {
@@ -376,34 +368,21 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
   },
-  searchWrapper: {
-    position: 'relative',
-    marginBottom: 12,
-  },
-  searchIcon: {
-    position: 'absolute',
-    left: 14,
-    top: 15,
-    zIndex: 2,
-  },
-  searchBar: {
-    marginBottom: 0,
-    paddingLeft: 38,
-  },
   filterRow: {
     gap: 8,
+    marginTop: 12,
   },
   filterBtn: {
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 6,
+    borderRadius: 999,
     borderWidth: 1,
     backgroundColor: 'transparent',
   },
   filterBtnActive: {
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 6,
+    borderRadius: 999,
     borderWidth: 1,
   },
   refreshButton: {
@@ -412,7 +391,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 6,
+    borderRadius: 999,
     borderWidth: 1,
     backgroundColor: 'transparent',
   },
@@ -441,7 +420,7 @@ const styles = StyleSheet.create({
   caseIcon: {
     width: 42,
     height: 42,
-    borderRadius: 6,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
@@ -472,7 +451,7 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: 14,
   },
   statusBadgeText: {
     fontSize: 10,

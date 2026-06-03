@@ -101,6 +101,9 @@ def extract_log(file_path):
         return events
 
     parsed_events = []
+    last_timestamp = None
+    last_original_ts = None
+    last_fmt_type = None
 
     for line_num, line in enumerate(lines, 1):
         line = line.strip()
@@ -120,8 +123,24 @@ def extract_log(file_path):
                 if timestamp:
                     break
 
-        if not timestamp:
-            continue
+        if timestamp:
+            last_timestamp = timestamp
+            last_original_ts = original_ts
+            last_fmt_type = fmt_type
+        else:
+            severity_hint = detect_severity(line)
+            has_log_signal = severity_hint != 'INFO' or re.search(
+                r'\b(INFO|WARN(?:ING)?|ERROR|FATAL|CRITICAL|DEBUG|TRACE)\b',
+                line,
+                re.IGNORECASE
+            )
+
+            if not has_log_signal or not last_timestamp:
+                continue
+
+            timestamp = last_timestamp
+            original_ts = last_original_ts
+            fmt_type = last_fmt_type
 
         severity = detect_severity(line)
         event_type = severity_to_event_type(severity)
@@ -135,9 +154,9 @@ def extract_log(file_path):
 
         parsed_events.append({
             "timestamp": timestamp,
-            "original_timestamp": original_ts,
+            "original_timestamp": original_ts or timestamp,
             "event_type": event_type,
-            "title": f"{severity} — Line {line_num}",
+            "title": f"{severity} - Line {line_num}",
             "description": description[:500] if description else f"Log entry at line {line_num}",
             "metadata": {
                 "line_number": line_num,

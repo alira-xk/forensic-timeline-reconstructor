@@ -17,7 +17,7 @@ export type EvidenceFile = {
 };
 
 export const getFilesByCase = async (caseId: string): Promise<EvidenceFile[]> => {
-  const response = await apiRequest(`/files/case/${caseId}`);
+  const response = await apiRequest(`/files/case/${caseId}?limit=100`);
   return response.data || [];
 };
 
@@ -63,6 +63,10 @@ export const uploadEvidenceFile = async (
   caseId: string,
   file: any
 ): Promise<EvidenceFile[]> => uploadEvidenceFiles(caseId, [file]);
+
+export const deleteEvidenceFile = async (fileId: string): Promise<void> => {
+  await apiRequest(`/files/${fileId}`, { method: 'DELETE' });
+};
 
 export const getFilePreviewUrl = async (fileId: string): Promise<string> => {
   const accessToken = await getAccessToken();

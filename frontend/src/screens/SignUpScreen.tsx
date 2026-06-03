@@ -90,7 +90,7 @@ export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
           },
         ]}
       >
-        {passed ? '✓' : '•'}
+        {passed ? 'OK' : '-'}
       </Text>
 
       <Text
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
     width: 44,
     height: 44,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 460,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 20,
     padding: 24,
     shadowOpacity: 0.08,
     shadowRadius: 10,
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
   cardIcon: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
     marginTop: -6,
     marginBottom: 16,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 14,
     borderWidth: 1,
   },
   passwordRulesHeader: {
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
   },
   messageBanner: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 12,
     marginBottom: 16,
     flexDirection: 'row',

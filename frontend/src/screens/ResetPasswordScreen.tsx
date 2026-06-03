@@ -23,6 +23,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ResetPassword'>;
 
 export const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
   const { theme } = useTheme();
+  const resetEmail = route.params?.email?.trim().toLowerCase() || '';
   const [token, setToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -50,7 +51,7 @@ export const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
       const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token.trim(), newPassword }),
+        body: JSON.stringify({ email: resetEmail || undefined, token: token.trim(), newPassword }),
       });
 
       const data = await response.json();

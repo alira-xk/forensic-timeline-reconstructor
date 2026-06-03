@@ -5,6 +5,7 @@ const User = require('../models/User');
 const { successResponse, errorResponse } = require('../utils/response');
 const { logAudit, AUDIT_ACTIONS } = require('../utils/auditLogger');
 const { sendPasswordResetEmail, sendOtpEmail } = require('../utils/emailService');
+const { verifyMailboxExists } = require('../utils/emailVerifier');
 
 const generateAccessToken = (userId) => {
   return jwt.sign({ userId }, process.env.JWT_ACCESS_SECRET, {
@@ -38,6 +39,28 @@ const BLOCKED_EMAIL_DOMAINS = [
   'yopmail.com',
   'trashmail.com',
   'sharklasers.com',
+];
+
+const PUBLIC_EMAIL_DOMAINS = [
+  'gmail.com',
+  'googlemail.com',
+  'outlook.com',
+  'hotmail.com',
+  'live.com',
+  'msn.com',
+  'yahoo.com',
+  'ymail.com',
+  'icloud.com',
+  'me.com',
+  'mac.com',
+  'proton.me',
+  'protonmail.com',
+  'aol.com',
+  'zoho.com',
+  'mail.com',
+  'gmx.com',
+  'gmx.net',
+  'yandex.com',
 ];
 
 const BLOCKED_EMAIL_LOCAL_PARTS = [
@@ -98,6 +121,10 @@ const shouldRequireEmailAddressAllowlist = () => {
   return (process.env.REQUIRE_EMAIL_ADDRESS_ALLOWLIST || 'false') === 'true';
 };
 
+const shouldRequirePublicEmailAllowlist = () => {
+  return (process.env.REQUIRE_PUBLIC_EMAIL_ALLOWLIST || 'false') === 'true';
+};
+
 const hasDnsMailTarget = async (domain) => {
   try {
     const mx = await dns.resolveMx(domain);
@@ -137,6 +164,14 @@ const validateEmailForDelivery = async (email) => {
   const [localPart, domain] = cleanEmail.split('@');
   const normalizedLocalPart = localPart.replace(/[._-]/g, '');
 
+  if (shouldRequirePublicEmailAllowlist() && PUBLIC_EMAIL_DOMAINS.includes(domain)) {
+    return {
+      ok: false,
+      email: cleanEmail,
+      message: `Public email addresses from "${domain}" must be approved by an investigator before registration.`,
+    };
+  }
+
   if (
     localPart.length < 4 ||
     BLOCKED_EMAIL_LOCAL_PARTS.includes(localPart) ||
@@ -164,6 +199,15 @@ const validateEmailForDelivery = async (email) => {
     if (!hasMailTarget) {
       return { ok: false, email: cleanEmail, message: 'Email domain cannot receive mail.' };
     }
+  }
+
+  const mailboxValidation = await verifyMailboxExists(cleanEmail);
+  if (!mailboxValidation.ok) {
+    return {
+      ok: false,
+      email: cleanEmail,
+      message: mailboxValidation.message || 'This email inbox could not be verified.',
+    };
   }
 
   return { ok: true, email: cleanEmail };
@@ -218,7 +262,9 @@ exports.register = async (req, res, next) => {
       }
       return errorResponse(
         res,
-        'Failed to send verification code. Please try again later.',
+        emailErr.code === 'EMAIL_NOT_CONFIGURED'
+          ? 'Email is not configured. Set DEV_EMAIL_LOG=true to print OTP codes in the backend terminal, or configure SMTP_USER and SMTP_PASS in .env.'
+          : 'Failed to send verification code. Please try again later.',
         502,
         'email_send_failed'
       );
@@ -242,6 +288,7 @@ exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
     const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = String(password || '').trim();
 
     const user = await User.findOne({ email: cleanEmail }).select('+password');
     if (!user) {
@@ -257,7 +304,7 @@ exports.login = async (req, res, next) => {
       return errorResponse(res, 'Please verify your email before login.', 403, 'account_not_verified');
     }
 
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await user.comparePassword(cleanPassword);
     if (!isMatch) {
       logAudit(user._id, AUDIT_ACTIONS.LOGIN, 'User', user._id.toString(), { reason: 'Wrong password' }, req.ip, false);
       return errorResponse(res, 'Invalid email or password.', 401);
@@ -430,17 +477,23 @@ exports.forgotPassword = async (req, res, next) => {
       return errorResponse(res, 'Email is required.', 400);
     }
 
-    const emailValidation = await validateEmailForDelivery(email);
-    if (!emailValidation.ok) {
-      return errorResponse(res, emailValidation.message, 400, 'invalid_email');
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail)) {
+      return errorResponse(res, 'Enter a valid email address.', 400, 'invalid_email');
     }
-    const cleanEmail = emailValidation.email;
 
     const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
-      // Avoid leaking whether the email exists.
-      return successResponse(res, 'If the email exists, a reset token was sent.');
+      return errorResponse(res, 'No account exists with this email address.', 404, 'account_not_found');
+    }
+
+    if (!user.isActive) {
+      return errorResponse(res, 'This account is deactivated.', 403, 'account_deactivated');
+    }
+
+    if (user.isVerified === false) {
+      return errorResponse(res, 'Please verify your account before resetting your password.', 403, 'account_not_verified');
     }
 
     const resetToken = generateResetToken();
@@ -453,7 +506,9 @@ exports.forgotPassword = async (req, res, next) => {
     } catch (error) {
       return errorResponse(
         res,
-        'Failed to send reset code. Please try again later.',
+        error.code === 'EMAIL_NOT_CONFIGURED'
+          ? 'Email is not configured. Set DEV_EMAIL_LOG=true to print reset codes in the backend terminal, or configure SMTP_USER and SMTP_PASS in .env.'
+          : 'Failed to send reset code. Please try again later.',
         502,
         'email_send_failed'
       );
@@ -482,6 +537,11 @@ exports.verifyOtp = async (req, res, next) => {
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail)) {
       return errorResponse(res, 'This is not a valid email address.', 400, 'invalid_email');
+    }
+
+    const emailValidation = await validateEmailForDelivery(cleanEmail);
+    if (!emailValidation.ok) {
+      return errorResponse(res, emailValidation.message, 400, 'invalid_email');
     }
 
     if (!/^\d{6}$/.test(cleanOtp)) {
@@ -553,7 +613,9 @@ exports.resendOtp = async (req, res, next) => {
     } catch (emailErr) {
       return errorResponse(
         res,
-        'Failed to send verification code. Please try again later.',
+        emailErr.code === 'EMAIL_NOT_CONFIGURED'
+          ? 'Email is not configured. Set DEV_EMAIL_LOG=true to print OTP codes in the backend terminal, or configure SMTP_USER and SMTP_PASS in .env.'
+          : 'Failed to send verification code. Please try again later.',
         502,
         'email_send_failed'
       );
@@ -567,9 +629,10 @@ exports.resendOtp = async (req, res, next) => {
 
 exports.resetPassword = async (req, res, next) => {
   try {
-    const { token, newPassword } = req.body;
+    const { email, token, newPassword } = req.body;
+    const cleanNewPassword = String(newPassword || '').trim();
 
-    if (!token || !newPassword) {
+    if (!token || !cleanNewPassword) {
       return errorResponse(res, 'Token and new password are required.', 400);
     }
 
@@ -577,21 +640,27 @@ exports.resetPassword = async (req, res, next) => {
       return errorResponse(res, 'Reset code must be 6 digits.', 400, 'invalid_reset_code');
     }
 
-    if (newPassword.length < 8) {
+    if (cleanNewPassword.length < 8) {
       return errorResponse(res, 'New password must be at least 8 characters.', 400);
     }
 
     const tokenHash = hashToken(token.trim());
-    const user = await User.findOne({
+    const query = {
       resetPasswordTokenHash: tokenHash,
       resetPasswordExpiresAt: { $gt: new Date() },
-    }).select('+password');
+    };
 
-    if (!user) {
-      return errorResponse(res, 'Invalid or expired reset token.', 400, 'INVALID_TOKEN');
+    if (email) {
+      query.email = String(email).trim().toLowerCase();
     }
 
-    user.password = newPassword;
+    const user = await User.findOne(query).select('+password');
+
+    if (!user) {
+      return errorResponse(res, 'Invalid or expired reset code. Please request a new reset code and try again.', 400, 'INVALID_TOKEN');
+    }
+
+    user.password = cleanNewPassword;
     user.resetPasswordTokenHash = null;
     user.resetPasswordExpiresAt = null;
     user.refreshTokens = [];

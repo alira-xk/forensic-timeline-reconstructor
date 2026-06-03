@@ -6,6 +6,8 @@ const { logAudit, AUDIT_ACTIONS } = require('../utils/auditLogger');
 const { runPythonExtraction } = require('../utils/extraction');
 const logger = require('../utils/logger');
 
+const STALE_PROCESSING_MS = parseInt(process.env.EXTRACTION_STALE_PROCESSING_MS || '60000', 10);
+
 const toValidDate = (value) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -17,6 +19,7 @@ const processFile = async (file, caseId, userId, ip) => {
       status: 'processing',
       errorReason: '',
       eventsExtracted: 0,
+      extractedAt: null,
     });
 
     const result = await runPythonExtraction(
@@ -125,11 +128,24 @@ exports.extractCase = async (req, res, next) => {
 
     const pendingFiles = await FileRecord.find({
       case: caseId,
-      status: { $in: ['pending', 'failed'] },
+      $or: [
+        { status: { $in: ['pending', 'failed'] } },
+        {
+          status: 'processing',
+          updatedAt: { $lte: new Date(Date.now() - STALE_PROCESSING_MS) },
+        },
+      ],
     });
 
     if (pendingFiles.length === 0) {
-      return successResponse(res, 'No pending files to extract.');
+      const activeProcessing = await FileRecord.countDocuments({ case: caseId, status: 'processing' });
+      return successResponse(
+        res,
+        activeProcessing
+          ? 'Extraction is already running. Please wait a moment and refresh.'
+          : 'No pending files to extract.',
+        { status: activeProcessing ? 'processing' : 'idle', filesQueued: 0 }
+      );
     }
 
     logAudit(req.user._id, AUDIT_ACTIONS.EXTRACTION_STARTED, 'Case', caseId, {

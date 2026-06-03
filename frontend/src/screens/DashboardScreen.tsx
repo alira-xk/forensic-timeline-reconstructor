@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { CompositeScreenProps, useFocusEffect } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -26,7 +27,9 @@ import {
   Plus,
   RefreshCcw,
   Settings,
+  ShieldCheck,
   Upload,
+  Zap,
 } from 'lucide-react-native';
 
 import { ScreenWrapper } from '../components/ScreenWrapper';
@@ -70,12 +73,21 @@ type DetailItem = {
   caseId?: string;
 };
 
+type MetricItem = {
+  key: SelectedMetric;
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  accentColor: string;
+  note: string;
+};
+
 export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { width } = useWindowDimensions();
 
-  const isWeb = Platform.OS === 'web' && width > 768;
+  const isWeb = Platform.OS === 'web' && width > 900;
 
   const [showSettings, setShowSettings] = useState(false);
   const [cases, setCases] = useState<CaseItem[]>([]);
@@ -85,7 +97,6 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
   const [selectedMetric, setSelectedMetric] = useState<SelectedMetric>('TOTAL_CASES');
 
   const loggedInUser = user as any;
-
   const displayName =
     loggedInUser?.name ||
     loggedInUser?.fullName ||
@@ -100,14 +111,8 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       setLoading(true);
 
       const casesData = await getCases();
-
-      const fileResults = await Promise.all(
-        casesData.map((caseItem) => getFilesByCase(caseItem._id))
-      );
-
-      const timelineResults = await Promise.all(
-        casesData.map((caseItem) => getTimelineByCase(caseItem._id))
-      );
+      const fileResults = await Promise.all(casesData.map((caseItem) => getFilesByCase(caseItem._id)));
+      const timelineResults = await Promise.all(casesData.map((caseItem) => getTimelineByCase(caseItem._id)));
 
       setCases(casesData);
       setFiles(fileResults.flat());
@@ -132,8 +137,77 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
   const processedFiles = files.filter((file) => file.status === 'processed').length;
   const failedFiles = files.filter((file) => file.status === 'failed').length;
   const totalTimelineEvents = timelineEvents.length;
-
   const latestCase = cases[0];
+  const completionRate = totalEvidenceFiles > 0 ? Math.round((processedFiles / totalEvidenceFiles) * 100) : 0;
+
+  const metricItems = useMemo<MetricItem[]>(() => [
+    {
+      key: 'TOTAL_CASES',
+      label: 'Cases',
+      value: totalCases,
+      icon: <Database size={19} color={theme.colors.primary} />,
+      accentColor: theme.colors.primary,
+      note: 'Stored investigations',
+    },
+    {
+      key: 'ACTIVE_CASES',
+      label: 'Active',
+      value: activeCases,
+      icon: <FolderOpen size={19} color={theme.colors.status.success} />,
+      accentColor: theme.colors.status.success,
+      note: 'Open investigations',
+    },
+    {
+      key: 'EVIDENCE_FILES',
+      label: 'Evidence',
+      value: totalEvidenceFiles,
+      icon: <FileText size={19} color={theme.colors.primary} />,
+      accentColor: theme.colors.primary,
+      note: 'Files in custody',
+    },
+    {
+      key: 'PROCESSED_FILES',
+      label: 'Processed',
+      value: processedFiles,
+      icon: <CheckCircle size={19} color={theme.colors.status.success} />,
+      accentColor: theme.colors.status.success,
+      note: `${completionRate}% extraction rate`,
+    },
+    {
+      key: 'PENDING_FILES',
+      label: 'Pending',
+      value: pendingFiles,
+      icon: <Clock size={19} color={theme.colors.status.warning} />,
+      accentColor: theme.colors.status.warning,
+      note: 'Awaiting extraction',
+    },
+    {
+      key: 'FAILED_FILES',
+      label: 'Failed',
+      value: failedFiles,
+      icon: <AlertTriangle size={19} color={theme.colors.status.error} />,
+      accentColor: theme.colors.status.error,
+      note: 'Need review',
+    },
+    {
+      key: 'TIMELINE_EVENTS',
+      label: 'Events',
+      value: totalTimelineEvents,
+      icon: <BarChart3 size={19} color={theme.colors.accent} />,
+      accentColor: theme.colors.accent,
+      note: 'Extracted signals',
+    },
+  ], [
+    activeCases,
+    completionRate,
+    failedFiles,
+    pendingFiles,
+    processedFiles,
+    theme.colors,
+    totalCases,
+    totalEvidenceFiles,
+    totalTimelineEvents,
+  ]);
 
   const recentActivity = useMemo<RecentActivityItem[]>(() => {
     return timelineEvents
@@ -147,7 +221,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       .map((event) => ({
         id: event._id,
         title: event.eventType,
-        description: `${event.fileRecord?.originalName || 'Unknown file'} • ${
+        description: `${event.fileRecord?.originalName || 'Unknown file'} - ${
           event.description || event.eventSource || 'Timeline event recorded'
         }`,
         time: formatTime(event.createdAt || event.timestamp),
@@ -156,25 +230,9 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
   }, [timelineEvents]);
 
   const selectedMetricTitle = useMemo(() => {
-    switch (selectedMetric) {
-      case 'TOTAL_CASES':
-        return 'Total Cases';
-      case 'ACTIVE_CASES':
-        return 'Active Cases';
-      case 'EVIDENCE_FILES':
-        return 'Evidence Files';
-      case 'PROCESSED_FILES':
-        return 'Processed Files';
-      case 'PENDING_FILES':
-        return 'Pending Files';
-      case 'FAILED_FILES':
-        return 'Failed Files';
-      case 'TIMELINE_EVENTS':
-        return 'Timeline Events';
-      default:
-        return 'Details';
-    }
-  }, [selectedMetric]);
+    const metric = metricItems.find((item) => item.key === selectedMetric);
+    return metric?.label || 'Details';
+  }, [metricItems, selectedMetric]);
 
   const selectedDetails = useMemo<DetailItem[]>(() => {
     if (selectedMetric === 'TOTAL_CASES') {
@@ -182,7 +240,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         id: item._id,
         title: item.title,
         subtitle: item.description || 'No description provided.',
-        meta: `Status: ${item.status} • Created: ${formatDate(item.createdAt)}`,
+        meta: `${item.status} - Created ${formatDate(item.createdAt)}`,
         caseId: item._id,
       }));
     }
@@ -194,7 +252,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
           id: item._id,
           title: item.title,
           subtitle: item.description || 'No description provided.',
-          meta: `Status: ${item.status} • Created: ${formatDate(item.createdAt)}`,
+          meta: `${item.status} - Created ${formatDate(item.createdAt)}`,
           caseId: item._id,
         }));
     }
@@ -203,8 +261,8 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       return files.map((item) => ({
         id: item._id,
         title: item.originalName,
-        subtitle: `Type: ${item.fileType} • Status: ${item.status}`,
-        meta: `SHA-256: ${shortHash(item.sha256Hash)} • Uploaded: ${formatDate(item.createdAt)}`,
+        subtitle: `Type ${item.fileType} - ${item.status}`,
+        meta: `SHA-256 ${shortHash(item.sha256Hash)} - Uploaded ${formatDate(item.createdAt)}`,
       }));
     }
 
@@ -214,8 +272,8 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         .map((item) => ({
           id: item._id,
           title: item.originalName,
-          subtitle: `Type: ${item.fileType} • Status: ${item.status}`,
-          meta: `SHA-256: ${shortHash(item.sha256Hash)} • Uploaded: ${formatDate(item.createdAt)}`,
+          subtitle: `Type ${item.fileType} - ${item.status}`,
+          meta: `SHA-256 ${shortHash(item.sha256Hash)} - Uploaded ${formatDate(item.createdAt)}`,
         }));
     }
 
@@ -225,8 +283,8 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         .map((item) => ({
           id: item._id,
           title: item.originalName,
-          subtitle: `Type: ${item.fileType} • Status: ${item.status}`,
-          meta: `SHA-256: ${shortHash(item.sha256Hash)} • Uploaded: ${formatDate(item.createdAt)}`,
+          subtitle: `Type ${item.fileType} - ${item.status}`,
+          meta: `SHA-256 ${shortHash(item.sha256Hash)} - Uploaded ${formatDate(item.createdAt)}`,
         }));
     }
 
@@ -236,8 +294,8 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         .map((item) => ({
           id: item._id,
           title: item.originalName,
-          subtitle: item.errorReason || `Type: ${item.fileType} • Status: ${item.status}`,
-          meta: `SHA-256: ${shortHash(item.sha256Hash)} • Uploaded: ${formatDate(item.createdAt)}`,
+          subtitle: item.errorReason || `Type ${item.fileType} - ${item.status}`,
+          meta: `SHA-256 ${shortHash(item.sha256Hash)} - Uploaded ${formatDate(item.createdAt)}`,
         }));
     }
 
@@ -248,15 +306,12 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         id: item._id,
         title: item.eventType,
         subtitle: item.description || item.eventSource || 'Timeline event recorded.',
-        meta: `File: ${item.fileRecord?.originalName || 'N/A'} • Time: ${formatDateTime(item.timestamp)}`,
+        meta: `File ${item.fileRecord?.originalName || 'N/A'} - ${formatDateTime(item.timestamp)}`,
       }));
   }, [selectedMetric, cases, files, timelineEvents]);
 
   function formatTime(dateValue?: string) {
-    if (!dateValue) {
-      return 'N/A';
-    }
-
+    if (!dateValue) return 'N/A';
     return new Date(dateValue).toLocaleTimeString(undefined, {
       hour: '2-digit',
       minute: '2-digit',
@@ -264,53 +319,28 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
   }
 
   function formatDate(dateValue?: string) {
-    if (!dateValue) {
-      return 'N/A';
-    }
-
+    if (!dateValue) return 'N/A';
     return new Date(dateValue).toLocaleDateString();
   }
 
   function formatDateTime(dateValue?: string) {
-    if (!dateValue) {
-      return 'N/A';
-    }
-
+    if (!dateValue) return 'N/A';
     return new Date(dateValue).toLocaleString();
   }
 
   function shortHash(hash?: string) {
-    if (!hash) {
-      return 'N/A';
-    }
-
-    if (hash.length <= 16) {
-      return hash;
-    }
-
+    if (!hash) return 'N/A';
+    if (hash.length <= 16) return hash;
     return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
   }
 
   const getActivityColor = (type: string) => {
     const normalized = type.toUpperCase();
-
-    if (normalized.includes('FAILED')) {
-      return theme.colors.status.error;
-    }
-
-    if (normalized.includes('UPLOADED')) {
-      return theme.colors.status.success;
-    }
-
-    if (normalized.includes('LOG')) {
-      return theme.colors.status.info;
-    }
-
-    if (normalized.includes('IMAGE')) {
-      return theme.colors.primary;
-    }
-
-    return theme.colors.status.warning;
+    if (normalized.includes('FAILED')) return theme.colors.status.error;
+    if (normalized.includes('UPLOADED')) return theme.colors.status.success;
+    if (normalized.includes('IMAGE')) return theme.colors.primary;
+    if (normalized.includes('AUTHOR')) return theme.colors.accent;
+    return theme.colors.amber;
   };
 
   const handleViewLatestTimeline = () => {
@@ -322,58 +352,39 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
     navigation.navigate('Timeline', { caseId: latestCase._id });
   };
 
-  const canOpenCaseFromSelectedList =
-    selectedMetric === 'TOTAL_CASES' || selectedMetric === 'ACTIVE_CASES';
+  const canOpenCaseFromSelectedList = selectedMetric === 'TOTAL_CASES' || selectedMetric === 'ACTIVE_CASES';
 
   const handleDetailItemPress = (item: DetailItem) => {
-    if (!canOpenCaseFromSelectedList || !item.caseId) {
-      return;
-    }
+    if (!canOpenCaseFromSelectedList || !item.caseId) return;
     navigation.navigate('CaseDetail', { caseId: item.caseId });
   };
 
-  const renderStatCard = (
-    key: SelectedMetric,
-    label: string,
-    value: number,
-    icon: React.ReactNode,
-    accentColor: string
-  ) => {
-    const isSelected = selectedMetric === key;
+  const renderMetricCard = (item: MetricItem) => {
+    const selected = selectedMetric === item.key;
 
     return (
       <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => setSelectedMetric(key)}
-        style={styles.statTouchable}
+        key={item.key}
+        activeOpacity={0.86}
+        onPress={() => setSelectedMetric(item.key)}
+        style={[
+          styles.metricCard,
+          {
+            borderColor: selected ? item.accentColor : theme.colors.border,
+            backgroundColor: theme.colors.panel,
+          },
+        ]}
       >
-        <Card
-          style={[
-            styles.statCard,
-            {
-              borderColor: isSelected ? accentColor : theme.colors.border,
-              borderWidth: isSelected ? 2 : 1,
-            },
-          ]}
-        >
-          <View style={[styles.statIconDef, { backgroundColor: `${accentColor}18` }]}>
-            {icon}
+        <View style={styles.metricTopRow}>
+          <View style={[styles.metricIcon, { backgroundColor: `${item.accentColor}18` }]}>
+            {item.icon}
           </View>
+          <View style={[styles.metricPulse, { backgroundColor: item.accentColor }]} />
+        </View>
 
-          <Text style={[styles.statValue, { color: theme.colors.text.primary }]}>
-            {value}
-          </Text>
-
-          <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>
-            {label}
-          </Text>
-
-          {isSelected ? (
-            <Text style={[styles.selectedText, { color: accentColor }]}>
-              Selected
-            </Text>
-          ) : null}
-        </Card>
+        <Text style={[styles.metricValue, { color: theme.colors.text.primary }]}>{item.value}</Text>
+        <Text style={[styles.metricLabel, { color: theme.colors.text.secondary }]}>{item.label}</Text>
+        <Text numberOfLines={1} style={[styles.metricNote, { color: item.accentColor }]}>{item.note}</Text>
       </TouchableOpacity>
     );
   };
@@ -386,298 +397,199 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         anchorPosition={{ top: 80, right: 24 }}
       />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.header, { borderColor: theme.colors.border }]}>
-          <View>
-            <Text style={[styles.brandTitle, { color: theme.colors.text.secondary }]}>
-              Case management
-            </Text>
-
-            <Text style={[styles.welcome, { color: theme.colors.text.primary }]}>
-              Welcome back, {displayName}
-            </Text>
-
-            <Text style={[styles.emailText, { color: theme.colors.text.secondary }]}>
-              {displayEmail}
-            </Text>
-          </View>
-
-          <View style={styles.headerRight}>
-            {!isWeb && (
-              <TouchableOpacity
-                onPress={() => setShowSettings(true)}
-                style={[styles.settingsIcon, { backgroundColor: theme.colors.surfaceHighlight }]}
-              >
-                <Settings size={20} color={theme.colors.text.primary} />
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              onPress={loadDashboardData}
-              style={[
-                styles.badge,
-                {
-                  backgroundColor: theme.colors.surfaceHighlight,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-            >
-              <RefreshCcw size={14} color={theme.colors.primary} />
-              <Text style={[styles.badgeText, { color: theme.colors.text.primary }]}>
-                REFRESH
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <LinearGradient
+          colors={theme.dark ? ['#111C2C', '#0C121A'] : ['#FFFFFF', '#ECF4FF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.hero, { borderColor: theme.colors.border }]}
+        >
+          <View style={styles.heroCopy}>
+            <View style={[styles.kickerPill, { borderColor: theme.colors.border }]}>
+              <ShieldCheck size={14} color={theme.colors.accent} />
+              <Text style={[styles.kickerText, { color: theme.colors.text.secondary }]}>
+                Evidence Reconstruction Workspace
               </Text>
-            </TouchableOpacity>
+            </View>
 
+            <Text style={[styles.heroTitle, { color: theme.colors.text.primary }]}>
+              Welcome Back to Your Dashboard, {displayName}
+            </Text>
+
+
+            <View style={styles.heroActions}>
+              <Button
+                title="Create Case"
+                onPress={() => navigation.navigate('CreateCase')}
+                icon={<Plus size={18} color="#FFFFFF" />}
+                style={styles.heroButton}
+              />
+
+              <Button
+                title="Latest Timeline"
+                variant="secondary"
+                onPress={handleViewLatestTimeline}
+                icon={<Activity size={18} color={theme.colors.text.primary} />}
+                style={styles.heroButton}
+              />
+            </View>
           </View>
-        </View>
+
+          <View style={styles.orbitPanel}>
+            <View style={[styles.orbitRing, { borderColor: theme.colors.backdrop.grid }]}>
+              <View style={[styles.orbitCore, { backgroundColor: theme.colors.primary }]}>
+                <Zap size={30} color="#FFFFFF" />
+              </View>
+              <View style={[styles.orbitNode, styles.orbitNodeA, { backgroundColor: theme.colors.accent }]} />
+              <View style={[styles.orbitNode, styles.orbitNodeB, { backgroundColor: theme.colors.amber }]} />
+              <View style={[styles.orbitNode, styles.orbitNodeC, { backgroundColor: theme.colors.status.error }]} />
+            </View>
+
+            <View style={[styles.heroStatPlate, { backgroundColor: theme.colors.panel, borderColor: theme.colors.border }]}>
+              <Text style={[styles.heroStatLabel, { color: theme.colors.text.secondary }]}>Processed evidence</Text>
+              <Text style={[styles.heroStatValue, { color: theme.colors.text.primary }]}>{completionRate}%</Text>
+            </View>
+          </View>
+        </LinearGradient>
 
         {loading ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator color={theme.colors.primary} />
-            <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>
-              Loading dashboard data...
-            </Text>
+            <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>Loading dashboard data...</Text>
           </View>
         ) : (
           <>
-            <View style={[styles.statsRow, isWeb && styles.statsRowWeb]}>
-              {renderStatCard(
-                'TOTAL_CASES',
-                'Total Cases',
-                totalCases,
-                <Database color={theme.colors.primary} size={20} />,
-                theme.colors.primary
-              )}
-
-              {renderStatCard(
-                'ACTIVE_CASES',
-                'Active Cases',
-                activeCases,
-                <FolderOpen color={theme.colors.status.success} size={20} />,
-                theme.colors.status.success
-              )}
-
-              {renderStatCard(
-                'EVIDENCE_FILES',
-                'Evidence Files',
-                totalEvidenceFiles,
-                <FileText color={theme.colors.primary} size={20} />,
-                theme.colors.primary
-              )}
+            <View style={styles.metricsScroller}>
+              <ScrollView
+                horizontal={!isWeb}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[styles.metricsGrid, isWeb && styles.metricsGridWeb]}
+              >
+                {metricItems.map(renderMetricCard)}
+              </ScrollView>
             </View>
 
-            <View style={[styles.statsRow, isWeb && styles.statsRowWeb]}>
-              {renderStatCard(
-                'PROCESSED_FILES',
-                'Processed Files',
-                processedFiles,
-                <CheckCircle color={theme.colors.status.success} size={20} />,
-                theme.colors.status.success
-              )}
+            <View style={[styles.mainGrid, isWeb && styles.mainGridWeb]}>
+              <Card style={styles.detailPanel}>
+                <View style={styles.panelHeader}>
+                  <View>
+                    <Text style={[styles.sectionEyebrow, { color: theme.colors.primary }]}>Live index</Text>
+                    <Text style={[styles.panelTitle, { color: theme.colors.text.primary }]}>
+                      {selectedMetricTitle}
+                    </Text>
+                  </View>
 
-              {renderStatCard(
-                'PENDING_FILES',
-                'Pending Files',
-                pendingFiles,
-                <Clock color={theme.colors.status.warning} size={20} />,
-                theme.colors.status.warning
-              )}
-
-              {renderStatCard(
-                'FAILED_FILES',
-                'Failed Files',
-                failedFiles,
-                <AlertTriangle color={theme.colors.status.error} size={20} />,
-                theme.colors.status.error
-              )}
-
-              {renderStatCard(
-                'TIMELINE_EVENTS',
-                'Timeline Events',
-                totalTimelineEvents,
-                <BarChart3 color={theme.colors.primary} size={20} />,
-                theme.colors.primary
-              )}
-            </View>
-
-            <Card style={styles.detailPanel}>
-              <View style={styles.detailHeader}>
-                <View>
-                  <Text style={[styles.detailTitle, { color: theme.colors.text.primary }]}>
-                    {selectedMetricTitle}
-                  </Text>
-                  <Text style={[styles.detailSubtitle, { color: theme.colors.text.secondary }]}>
-                    Showing {selectedDetails.length} record(s)
+                  <Text style={[styles.panelCount, { color: theme.colors.text.secondary }]}>
+                    {selectedDetails.length} records
                   </Text>
                 </View>
 
-                <Text style={[styles.clickHint, { color: theme.colors.text.secondary }]}>
-                  Click any summary card to change this list
-                </Text>
-              </View>
-
-              {selectedDetails.length === 0 ? (
-                <View style={styles.emptyDetail}>
-                  <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
-                    No records found
-                  </Text>
-                  <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
-                    This category has no data yet.
-                  </Text>
-                </View>
-              ) : (
-                selectedDetails.map((item, index) => (
-                  <View key={item.id}>
+                {selectedDetails.length === 0 ? (
+                  <View style={styles.emptyDetail}>
+                    <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>No records found</Text>
+                    <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>This category has no data yet.</Text>
+                  </View>
+                ) : (
+                  selectedDetails.slice(0, 8).map((item, index) => (
                     <TouchableOpacity
-                      activeOpacity={canOpenCaseFromSelectedList ? 0.8 : 1}
+                      key={item.id}
+                      activeOpacity={canOpenCaseFromSelectedList ? 0.78 : 1}
                       disabled={!canOpenCaseFromSelectedList}
                       onPress={() => handleDetailItemPress(item)}
+                      style={[styles.detailRow, index !== 0 && { borderTopColor: theme.colors.border, borderTopWidth: 1 }]}
                     >
-                      <View style={styles.detailItem}>
-                        <View style={[styles.detailDot, { backgroundColor: theme.colors.primary }]} />
-
-                        <View style={styles.detailContent}>
-                          <Text
-                            numberOfLines={1}
-                            style={[styles.detailItemTitle, { color: theme.colors.text.primary }]}
-                          >
-                            {item.title}
-                          </Text>
-
-                          <Text
-                            numberOfLines={2}
-                            style={[styles.detailItemSubtitle, { color: theme.colors.text.secondary }]}
-                          >
-                            {item.subtitle}
-                          </Text>
-
-                          <Text
-                            numberOfLines={1}
-                            style={[styles.detailItemMeta, { color: theme.colors.text.muted }]}
-                          >
-                            {item.meta}
-                          </Text>
-                        </View>
-
-                        {canOpenCaseFromSelectedList ? (
-                          <ArrowRight size={16} color={theme.colors.text.muted} />
-                        ) : null}
+                      <View style={[styles.detailDot, { backgroundColor: theme.colors.primary }]} />
+                      <View style={styles.detailContent}>
+                        <Text numberOfLines={1} style={[styles.detailTitle, { color: theme.colors.text.primary }]}>
+                          {item.title}
+                        </Text>
+                        <Text numberOfLines={2} style={[styles.detailSubtitle, { color: theme.colors.text.secondary }]}>
+                          {item.subtitle}
+                        </Text>
+                        <Text numberOfLines={1} style={[styles.detailMeta, { color: theme.colors.text.muted }]}>
+                          {item.meta}
+                        </Text>
                       </View>
+                      {canOpenCaseFromSelectedList ? <ArrowRight size={17} color={theme.colors.text.muted} /> : null}
                     </TouchableOpacity>
+                  ))
+                )}
+              </Card>
 
-                    {index !== selectedDetails.length - 1 ? (
-                      <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
-                    ) : null}
+              <View style={styles.sideStack}>
+                <Card style={styles.actionPanel}>
+                  <Text style={[styles.sectionEyebrow, { color: theme.colors.accent }]}>Fast path</Text>
+                  <Text style={[styles.panelTitle, { color: theme.colors.text.primary }]}>Investigation actions</Text>
+
+                  <View style={styles.actionGrid}>
+                    <Button
+                      title="New Case"
+                      onPress={() => navigation.navigate('CreateCase')}
+                      icon={<Plus size={18} color="#FFFFFF" />}
+                    />
+                    <Button
+                      title="Cases"
+                      onPress={() => navigation.navigate('CasesList')}
+                      variant="secondary"
+                      icon={<FolderOpen size={18} color={theme.colors.text.primary} />}
+                    />
+                    <Button
+                      title="Timeline"
+                      onPress={handleViewLatestTimeline}
+                      variant="secondary"
+                      icon={<Activity size={18} color={theme.colors.text.primary} />}
+                    />
                   </View>
-                ))
-              )}
-            </Card>
 
-            <View style={[isWeb && styles.webSplitContainer]}>
-              <View style={[isWeb && styles.webColLeft]}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text.secondary }]}>
-                    QUICK ACTIONS
-                  </Text>
-                </View>
-
-                <View style={styles.actionsGrid}>
-                  <Button
-                    title="Create New Case"
-                    onPress={() => navigation.navigate('CreateCase')}
-                    variant="primary"
-                    style={styles.actionButton}
-                    icon={<Plus size={18} color="#FFFFFF" />}
-                  />
-
-                  <Button
-                    title="View Cases"
-                    onPress={() => navigation.navigate('CasesList')}
-                    variant="secondary"
-                    style={styles.actionButton}
-                    icon={<FolderOpen size={18} color={theme.colors.text.primary} />}
-                  />
-
-                  <Button
-                    title="View Latest Timeline"
-                    onPress={handleViewLatestTimeline}
-                    variant="secondary"
-                    style={styles.actionButton}
-                    icon={<Activity size={18} color={theme.colors.text.primary} />}
-                  />
-                </View>
-
-                <Card style={styles.summaryCard}>
-                  <Text style={[styles.summaryTitle, { color: theme.colors.text.primary }]}>
-                    Project Summary
-                  </Text>
-
-                  <Text style={[styles.summaryText, { color: theme.colors.text.secondary }]}>
-                    This dashboard shows real data from MongoDB. It summarizes cases,
-                    evidence uploads, metadata extraction status, and generated timeline events.
-                  </Text>
-
-                  <View style={styles.summaryRow}>
+                  <View style={[styles.summaryStrip, { borderColor: theme.colors.border }]}>
                     <Upload size={16} color={theme.colors.primary} />
-                    <Text style={[styles.summarySmall, { color: theme.colors.text.secondary }]}>
-                      Supported evidence: PDF, DOC, DOCX, Images, TXT, LOG
+                    <Text style={[styles.summaryStripText, { color: theme.colors.text.secondary }]}>
+                      PDF, DOC, DOCX, images, TXT, and LOG files can be added to a case.
                     </Text>
                   </View>
                 </Card>
-              </View>
 
-              <View style={[isWeb && styles.webColRight]}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text.secondary }]}>
-                    RECENT TIMELINE ACTIVITY
-                  </Text>
-                </View>
+                <Card style={styles.activityPanel}>
+                  <View style={styles.panelHeader}>
+                    <View>
+                      <Text style={[styles.sectionEyebrow, { color: theme.colors.amber }]}>Recent signals</Text>
+                      <Text style={[styles.panelTitle, { color: theme.colors.text.primary }]}>Timeline activity</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.iconButton, { borderColor: theme.colors.border }]}
+                      onPress={loadDashboardData}
+                      activeOpacity={0.8}
+                    >
+                      <RefreshCcw size={15} color={theme.colors.text.secondary} />
+                    </TouchableOpacity>
+                  </View>
 
-                <Card style={styles.activityCard}>
                   {recentActivity.length === 0 ? (
                     <View style={styles.emptyActivity}>
-                      <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
-                        No activity yet
-                      </Text>
+                      <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>No activity yet</Text>
                       <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
                         Upload evidence and run metadata extraction to generate timeline activity.
                       </Text>
                     </View>
                   ) : (
                     recentActivity.map((item, index) => (
-                      <View key={item.id}>
-                        <View style={styles.activityItem}>
-                          <View
-                            style={[
-                              styles.activityDot,
-                              { backgroundColor: getActivityColor(item.type) },
-                            ]}
-                          />
-
-                          <View style={styles.activityContent}>
-                            <Text
-                              numberOfLines={1}
-                              style={[styles.activityTitle, { color: theme.colors.text.primary }]}
-                            >
-                              {item.title}
-                            </Text>
-
-                            <Text
-                              numberOfLines={2}
-                              style={[styles.activityDesc, { color: theme.colors.text.secondary }]}
-                            >
-                              {item.description}
-                            </Text>
-                          </View>
-
-                          <Text style={[styles.activityTime, { color: theme.colors.text.muted }]}>
-                            {item.time}
+                      <View
+                        key={item.id}
+                        style={[
+                          styles.activityItem,
+                          index !== 0 && { borderTopColor: theme.colors.border, borderTopWidth: 1 },
+                        ]}
+                      >
+                        <View style={[styles.activityDot, { backgroundColor: getActivityColor(item.type) }]} />
+                        <View style={styles.activityContent}>
+                          <Text numberOfLines={1} style={[styles.activityTitle, { color: theme.colors.text.primary }]}>
+                            {item.title}
+                          </Text>
+                          <Text numberOfLines={2} style={[styles.activityDesc, { color: theme.colors.text.secondary }]}>
+                            {item.description}
                           </Text>
                         </View>
-
-                        {index !== recentActivity.length - 1 ? (
-                          <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
-                        ) : null}
+                        <Text style={[styles.activityTime, { color: theme.colors.text.muted }]}>{item.time}</Text>
                       </View>
                     ))
                   )}
@@ -686,6 +598,16 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
             </View>
           </>
         )}
+
+        {!isWeb ? (
+          <TouchableOpacity
+            onPress={() => setShowSettings(true)}
+            style={[styles.mobileSettings, { backgroundColor: theme.colors.panelStrong, borderColor: theme.colors.border }]}
+            activeOpacity={0.85}
+          >
+            <Settings size={20} color={theme.colors.text.primary} />
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
     </ScreenWrapper>
   );
@@ -693,53 +615,131 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   content: {
-    padding: 22,
+    width: '100%',
+    maxWidth: 1280,
+    alignSelf: 'center',
+    padding: 24,
+    paddingBottom: 52,
   },
-  header: {
+  hero: {
+    borderWidth: 1,
+    borderRadius: 24,
+    minHeight: 330,
+    padding: 28,
+    marginBottom: 22,
+    overflow: 'hidden',
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 24,
-    borderBottomWidth: 1,
-    paddingBottom: 16,
-    gap: 16,
+    gap: 24,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 24px 80px rgba(15, 23, 42, 0.16)',
+      } as any,
+    }),
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
+  heroCopy: {
+    flex: 1,
+    minWidth: 260,
   },
-  brandTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0,
-    marginBottom: 4,
-  },
-  welcome: {
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  emailText: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  kickerPill: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 6,
-    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 18,
   },
-  badgeText: {
-    fontSize: 10,
+  kickerText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  heroTitle: {
+    fontSize: 42,
+    lineHeight: 46,
+    fontWeight: '900',
+    maxWidth: 640,
+  },
+  heroSubtitle: {
+    fontSize: 15,
+    lineHeight: 23,
+    marginTop: 14,
+    maxWidth: 690,
+  },
+  heroActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 22,
+  },
+  heroButton: {
+    minWidth: 150,
+  },
+  identityText: {
+    marginTop: 16,
+    fontSize: 12,
     fontWeight: '700',
   },
+  orbitPanel: {
+    width: 260,
+    minHeight: 240,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orbitRing: {
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orbitCore: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orbitNode: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    borderRadius: 14,
+  },
+  orbitNodeA: {
+    top: 14,
+    right: 44,
+  },
+  orbitNodeB: {
+    bottom: 26,
+    left: 34,
+  },
+  orbitNodeC: {
+    right: 18,
+    bottom: 70,
+  },
+  heroStatPlate: {
+    position: 'absolute',
+    right: 0,
+    bottom: 8,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    width: 168,
+  },
+  heroStatLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  heroStatValue: {
+    fontSize: 28,
+    fontWeight: '900',
+    marginTop: 4,
+  },
   loadingBox: {
-    minHeight: 260,
+    minHeight: 280,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -747,156 +747,188 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 14,
   },
-  statsRow: {
-    flexDirection: 'column',
-    marginBottom: 16,
-    gap: 16,
+  metricsScroller: {
+    marginBottom: 20,
   },
-  statsRowWeb: {
+  metricsGrid: {
+    gap: 12,
+    paddingRight: 24,
+  },
+  metricsGridWeb: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingRight: 0,
   },
-  statTouchable: {
-    flex: 1,
+  metricCard: {
+    width: 172,
+    minHeight: 154,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
   },
-  statCard: {
-    flex: 1,
-    alignItems: 'flex-start',
-    padding: 18,
+  metricTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  statIconDef: {
-    padding: 8,
-    borderRadius: 6,
-    marginBottom: 14,
+  metricIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  statValue: {
+  metricPulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  metricValue: {
     fontSize: 30,
-    fontWeight: '800',
-    letterSpacing: 0,
+    fontWeight: '900',
+    marginTop: 14,
   },
-  statLabel: {
+  metricLabel: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '900',
     marginTop: 2,
   },
-  selectedText: {
+  metricNote: {
     fontSize: 11,
     fontWeight: '800',
     marginTop: 10,
-    textTransform: 'uppercase',
+  },
+  mainGrid: {
+    gap: 18,
+  },
+  mainGridWeb: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
   detailPanel: {
+    flex: 1.25,
     padding: 0,
-    marginBottom: 12,
     overflow: 'hidden',
   },
-  detailHeader: {
+  sideStack: {
+    flex: 0.8,
+    gap: 18,
+  },
+  panelHeader: {
     padding: 18,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 16,
+    gap: 14,
+    alignItems: 'center',
   },
-  detailTitle: {
-    fontSize: 18,
+  sectionEyebrow: {
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 5,
+  },
+  panelTitle: {
+    fontSize: 19,
+    fontWeight: '900',
+  },
+  panelCount: {
+    fontSize: 12,
     fontWeight: '800',
   },
-  detailSubtitle: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  clickHint: {
-    fontSize: 11,
-    fontWeight: '700',
-    alignSelf: 'center',
-  },
-  detailItem: {
+  detailRow: {
+    minHeight: 86,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 16,
+    alignItems: 'center',
     gap: 12,
   },
   detailDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    marginTop: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   detailContent: {
     flex: 1,
   },
-  detailItemTitle: {
+  detailTitle: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '900',
   },
-  detailItemSubtitle: {
+  detailSubtitle: {
     fontSize: 12,
     lineHeight: 18,
-    marginTop: 4,
+    marginTop: 3,
   },
-  detailItemMeta: {
+  detailMeta: {
     fontSize: 11,
     marginTop: 5,
   },
   emptyDetail: {
-    padding: 18,
+    padding: 22,
   },
-  sectionHeader: {
-    marginBottom: 16,
-    marginTop: 18,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  actionsGrid: {
-    marginBottom: 20,
-    gap: 10,
-  },
-  actionButton: {
-    width: '100%',
-  },
-  summaryCard: {
-    padding: 18,
-  },
-  summaryTitle: {
+  emptyTitle: {
     fontSize: 16,
     fontWeight: '900',
-    marginBottom: 8,
   },
-  summaryText: {
+  emptyText: {
     fontSize: 13,
-    lineHeight: 20,
+    lineHeight: 19,
+    marginTop: 6,
   },
-  summaryRow: {
+  actionPanel: {
+    padding: 18,
+  },
+  actionGrid: {
+    gap: 10,
+    marginTop: 16,
+  },
+  summaryStrip: {
+    marginTop: 16,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 14,
+    gap: 10,
   },
-  summarySmall: {
-    fontSize: 12,
+  summaryStripText: {
     flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
   },
-  activityCard: {
+  activityPanel: {
     padding: 0,
     overflow: 'hidden',
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyActivity: {
+    padding: 18,
   },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    gap: 16,
+    gap: 13,
   },
   activityDot: {
     width: 9,
-    height: 9,
-    borderRadius: 5,
+    height: 34,
+    borderRadius: 9,
   },
   activityContent: {
     flex: 1,
   },
   activityTitle: {
-    fontWeight: '800',
+    fontWeight: '900',
     fontSize: 14,
   },
   activityDesc: {
@@ -908,34 +940,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontVariant: ['tabular-nums'],
   },
-  divider: {
-    height: 1,
-  },
-  settingsIcon: {
-    padding: 8,
-    borderRadius: 20,
-    marginRight: 8,
-  },
-  emptyActivity: {
-    padding: 22,
-  },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  emptyText: {
-    fontSize: 13,
-    marginTop: 6,
-    lineHeight: 19,
-  },
-  webSplitContainer: {
-    flexDirection: 'row',
-    gap: 32,
-  },
-  webColLeft: {
-    flex: 1,
-  },
-  webColRight: {
-    flex: 1,
+  mobileSettings: {
+    position: 'absolute',
+    top: 18,
+    right: 18,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

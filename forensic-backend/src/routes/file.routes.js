@@ -1,6 +1,12 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
-const { upload, computeSha256, ensureCaseUploadAccess, handleUploadErrors } = require('../middleware/upload');
+const {
+  upload,
+  computeSha256,
+  ensureCaseUploadAccess,
+  handleUploadErrors,
+  MAX_FILES_PER_UPLOAD,
+} = require('../middleware/upload');
 const fileController = require('../controllers/file.controller');
 
 const router = express.Router();
@@ -10,7 +16,7 @@ router.use(authenticate);
 router.post(
   '/upload/:caseId',
   ensureCaseUploadAccess,
-  upload.array('files', 20),
+  upload.array('files', MAX_FILES_PER_UPLOAD),
   handleUploadErrors,
   computeSha256,
   fileController.uploadFiles

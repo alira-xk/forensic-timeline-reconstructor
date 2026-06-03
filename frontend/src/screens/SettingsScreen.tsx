@@ -19,7 +19,7 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
     };
 
     return (
-        <ScreenWrapper style={{ backgroundColor: theme.colors.surfaceHighlight }}>
+        <ScreenWrapper backgroundTreatment="quiet">
             <View style={styles.header}>
                 <Text style={[styles.title, { color: theme.colors.text.primary }]}>System Settings</Text>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
@@ -51,7 +51,7 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: theme.colors.text.secondary }]}>PREFERENCES</Text>
 
-                    <View style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                    <View style={[styles.row, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border }]}>
                         <View style={styles.rowLeft}>
                             {isDark ? <Moon size={20} color={theme.colors.primary} /> : <Sun size={20} color={theme.colors.primary} />}
                             <Text style={[styles.rowLabel, { color: theme.colors.text.primary }]}>Dark Mode</Text>
@@ -68,7 +68,7 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: theme.colors.text.secondary }]}>SYSTEM</Text>
 
-                    <TouchableOpacity style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                    <TouchableOpacity style={[styles.row, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border }]}>
                         <View style={styles.rowLeft}>
                             <Info size={20} color={theme.colors.text.secondary} />
                             <Text style={[styles.rowLabel, { color: theme.colors.text.primary }]}>About System</Text>
@@ -77,7 +77,7 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, marginTop: -1 }]}
+                        style={[styles.row, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border, marginTop: -1 }]}
                         onPress={handleSignOut}
                     >
                         <View style={styles.rowLeft}>
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: 20,
-        fontWeight: '700',
+        fontWeight: '900',
     },
     closeBtn: {
         padding: 4,
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         padding: 16,
         borderWidth: 1,
-        borderRadius: 8, // Using consistent border radius manually
+        borderRadius: 16,
     },
     rowLeft: {
         flexDirection: 'row',
