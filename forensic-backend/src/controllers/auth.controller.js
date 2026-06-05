@@ -261,18 +261,22 @@ exports.register = async (req, res, next) => {
         await User.findByIdAndDelete(user._id);
       }
 
-      const isProd = (process.env.NODE_ENV || '').toLowerCase() === 'production';
+      const shouldShowDebug =
+        (process.env.DEV_EMAIL_LOG || 'false') === 'true' ||
+        (process.env.SMTP_DEBUG || 'false') === 'true';
+
       const baseMessage =
         emailErr.code === 'EMAIL_NOT_CONFIGURED'
           ? 'Email is not configured. Set DEV_EMAIL_LOG=true to print OTP codes in the backend terminal, or configure SMTP_USER and SMTP_PASS in .env.'
           : 'Failed to send verification code. Please try again later.';
 
-      const debugMessage = !isProd
+      const debugMessage = shouldShowDebug
         ? `${baseMessage}${emailErr && emailErr.message ? ` — ${emailErr.message}` : ''}${emailErr && emailErr.code ? ` (code: ${emailErr.code})` : ''}`
         : baseMessage;
 
       return errorResponse(res, debugMessage, 502, 'email_send_failed');
     }
+
 
 
     logAudit(user._id, AUDIT_ACTIONS.REGISTER, 'User', user._id.toString(), { email }, req.ip);
@@ -509,14 +513,20 @@ exports.forgotPassword = async (req, res, next) => {
     try {
       await sendPasswordResetEmail(cleanEmail, resetToken);
     } catch (error) {
-      return errorResponse(
-        res,
+      const shouldShowDebug =
+        (process.env.DEV_EMAIL_LOG || 'false') === 'true' ||
+        (process.env.SMTP_DEBUG || 'false') === 'true';
+
+      const baseMessage =
         error.code === 'EMAIL_NOT_CONFIGURED'
           ? 'Email is not configured. Set DEV_EMAIL_LOG=true to print reset codes in the backend terminal, or configure SMTP_USER and SMTP_PASS in .env.'
-          : 'Failed to send reset code. Please try again later.',
-        502,
-        'email_send_failed'
-      );
+          : 'Failed to send reset code. Please try again later.';
+
+      const debugMessage = shouldShowDebug
+        ? `${baseMessage}${error && error.message ? ` — ${error.message}` : ''}${error && error.code ? ` (code: ${error.code})` : ''}`
+        : baseMessage;
+
+      return errorResponse(res, debugMessage, 502, 'email_send_failed');
     }
 
     logAudit(user._id, AUDIT_ACTIONS.PASSWORD_RESET_REQUESTED, 'User', user._id.toString(), {}, req.ip);
