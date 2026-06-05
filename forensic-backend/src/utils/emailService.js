@@ -1,28 +1,45 @@
 const nodemailer = require('nodemailer');
 const dns = require('dns').promises;
 
-const getEmailConfig = () => ({
-  host: String(process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com').trim(),
-  port: parseInt(String(process.env.SMTP_PORT || process.env.EMAIL_PORT || '465').trim(), 10),
-  secure: String(process.env.SMTP_SECURE || process.env.EMAIL_SECURE || 'true').trim() === 'true',
-  user: String(process.env.SMTP_USER || process.env.EMAIL_USER || '').trim(),
-  pass: String(process.env.SMTP_PASS || process.env.EMAIL_PASS || '').trim(),
-  from: String(process.env.SMTP_FROM || process.env.EMAIL_FROM || '').trim(),
-  fromName: String(process.env.EMAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'Forensic Timeline').trim(),
-});
+const parsePort = (value, fallback) => {
+  const port = Number.parseInt(String(value || '').trim(), 10);
+  return Number.isFinite(port) && port > 0 ? port : fallback;
+};
+
+const parseSecure = (value, port) => {
+  if (value !== undefined && value !== null && String(value).trim() !== '') {
+    return String(value).trim().toLowerCase() === 'true';
+  }
+
+  return port === 465;
+};
+
+const getEmailConfig = () => {
+  const port = parsePort(process.env.SMTP_PORT || process.env.EMAIL_PORT, 465);
+
+  return {
+    host: String(process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com').trim(),
+    port,
+    secure: parseSecure(process.env.SMTP_SECURE || process.env.EMAIL_SECURE, port),
+    user: String(process.env.SMTP_USER || process.env.EMAIL_USER || '').trim(),
+    pass: String(process.env.SMTP_PASS || process.env.EMAIL_PASS || '').trim(),
+    from: String(process.env.SMTP_FROM || process.env.EMAIL_FROM || '').trim(),
+    fromName: String(process.env.EMAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'Forensic Timeline').trim(),
+  };
+};
 
 const getSmtpTimeoutMs = () => {
   const timeout = Number(process.env.SMTP_TIMEOUT_MS || 12000);
   return Number.isFinite(timeout) && timeout > 0 ? timeout : 12000;
 };
 
-const resolveSmtpHost = async (host) => {
+const resolveSmtpHosts = async (host) => {
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
-    return host;
+    return [host];
   }
 
   if ((process.env.SMTP_FORCE_IPV4 || 'true') !== 'true') {
-    return host;
+    return [host];
   }
 
   const addresses = await dns.resolve4(host);
@@ -30,27 +47,36 @@ const resolveSmtpHost = async (host) => {
     throw new Error(`No IPv4 SMTP address found for ${host}.`);
   }
 
-  return addresses[0];
+  return addresses;
 };
 
-const buildTransporter = async () => {
-  const config = getEmailConfig();
-  const timeout = getSmtpTimeoutMs();
+const getTransportTargets = (config, resolvedHosts) => {
+  const targets = [];
 
-  if (!config.user || !config.pass) {
-    const error = new Error(
-      'Email SMTP credentials are missing. Set DEV_EMAIL_LOG=true for local testing, or configure SMTP_USER and SMTP_PASS in forensic-backend/.env.'
-    );
-    error.code = 'EMAIL_NOT_CONFIGURED';
-    throw error;
+  const add = (port, secure) => {
+    resolvedHosts.forEach((host) => {
+      const key = `${host}:${port}:${secure}`;
+      if (!targets.some((target) => target.key === key)) {
+        targets.push({ key, host, port, secure });
+      }
+    });
+  };
+
+  add(config.port, config.secure);
+
+  if (config.host === 'smtp.gmail.com' || config.host.endsWith('.gmail.com')) {
+    add(465, true);
+    add(587, false);
   }
 
-  const resolvedHost = await resolveSmtpHost(config.host);
+  return targets;
+};
 
-  return nodemailer.createTransport({
-    host: resolvedHost,
-    port: config.port,
-    secure: config.secure,
+const createTransporter = (config, target, timeout) =>
+  nodemailer.createTransport({
+    host: target.host,
+    port: target.port,
+    secure: target.secure,
     name: config.host,
     family: 4,
     auth: {
@@ -64,6 +90,39 @@ const buildTransporter = async () => {
     greetingTimeout: timeout,
     socketTimeout: timeout,
   });
+
+const sendWithSmtpFailover = async (mailOptions) => {
+  const config = getEmailConfig();
+  const timeout = getSmtpTimeoutMs();
+
+  if (!config.user || !config.pass) {
+    const error = new Error(
+      'Email SMTP credentials are missing. Set DEV_EMAIL_LOG=true for local testing, or configure SMTP_USER and SMTP_PASS in forensic-backend/.env.'
+    );
+    error.code = 'EMAIL_NOT_CONFIGURED';
+    throw error;
+  }
+
+  const resolvedHosts = await resolveSmtpHosts(config.host);
+  const targets = getTransportTargets(config, resolvedHosts);
+  let lastError;
+
+  for (const target of targets) {
+    try {
+      const transporter = createTransporter(config, target, timeout);
+      await transporter.sendMail(mailOptions);
+      return;
+    } catch (err) {
+      lastError = err;
+
+      const retryableCodes = ['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'ECONNRESET', 'ENOTFOUND', 'EHOSTUNREACH'];
+      if (!retryableCodes.includes(err.code)) {
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error('Failed to send email.');
 };
 
 const getFromAddress = () => {
@@ -80,15 +139,10 @@ const getFromName = () => {
 };
 
 const sendPasswordResetEmail = async (to, token) => {
-  // Development helper: when DEV_EMAIL_LOG is set, do not send an email —
-  // instead log the token to console so local development can proceed
-  // without valid SMTP credentials.
   if ((process.env.DEV_EMAIL_LOG || 'false') === 'true') {
-    console.info('DEV_EMAIL_LOG=true — password reset code for', to, ':', token);
+    console.info('DEV_EMAIL_LOG=true - password reset code for', to, ':', token);
     return;
   }
-
-  const transporter = await buildTransporter();
 
   const html = `
     <div style="font-family: Arial, sans-serif; padding: 20px;">
@@ -100,7 +154,7 @@ const sendPasswordResetEmail = async (to, token) => {
     </div>
   `;
 
-  await transporter.sendMail({
+  await sendWithSmtpFailover({
     from: `${getFromName()} <${getFromAddress()}>`,
     to,
     subject: 'Reset your password',
@@ -110,11 +164,9 @@ const sendPasswordResetEmail = async (to, token) => {
 
 const sendOtpEmail = async (to, otpCode) => {
   if ((process.env.DEV_EMAIL_LOG || 'false') === 'true') {
-    console.info('DEV_EMAIL_LOG=true — OTP code for', to, ':', otpCode);
+    console.info('DEV_EMAIL_LOG=true - OTP code for', to, ':', otpCode);
     return;
   }
-
-  const transporter = await buildTransporter();
 
   const html = `
     <div style="font-family: Arial, sans-serif; padding: 20px;">
@@ -126,7 +178,7 @@ const sendOtpEmail = async (to, otpCode) => {
     </div>
   `;
 
-  await transporter.sendMail({
+  await sendWithSmtpFailover({
     from: `${getFromName()} <${getFromAddress()}>`,
     to,
     subject: 'Your verification code',

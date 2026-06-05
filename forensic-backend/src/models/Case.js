@@ -63,8 +63,17 @@ caseSchema.pre('save', async function (next) {
   if (this.caseNumber) return next();
   try {
     const year = new Date().getFullYear();
-    const count = await mongoose.model('Case').countDocuments();
-    const seq = String(count + 1).padStart(5, '0');
+    const latestCase = await mongoose
+      .model('Case')
+      .findOne({ caseNumber: { $regex: `^FTR-${year}-\\d{5}$` } })
+      .sort({ caseNumber: -1 })
+      .select('caseNumber')
+      .lean();
+
+    const latestSeq = latestCase?.caseNumber
+      ? Number.parseInt(latestCase.caseNumber.split('-').pop(), 10)
+      : 0;
+    const seq = String((Number.isFinite(latestSeq) ? latestSeq : 0) + 1).padStart(5, '0');
     this.caseNumber = `FTR-${year}-${seq}`;
     next();
   } catch (err) {
