@@ -523,11 +523,6 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
 
                   <View style={styles.actionGrid}>
                     <Button
-                      title="New Case"
-                      onPress={() => navigation.navigate('CreateCase')}
-                      icon={<Plus size={18} color="#FFFFFF" />}
-                    />
-                    <Button
                       title="Cases"
                       onPress={() => navigation.navigate('CasesList')}
                       variant="secondary"

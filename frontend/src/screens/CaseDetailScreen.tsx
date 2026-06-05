@@ -1,9 +1,10 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Image,
+  LayoutChangeEvent,
   Linking,
   Modal,
   RefreshControl,
@@ -38,6 +39,7 @@ import {
   Lock,
   MessageSquare,
   Network,
+  PlayCircle,
   Plus,
   RefreshCcw,
   ShieldCheck,
@@ -97,6 +99,12 @@ type Props = NativeStackScreenProps<RootStackParamList, 'CaseDetail'>;
 export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const { caseId } = route.params;
   const { theme } = useTheme();
+  const scrollRef = useRef<ScrollView | null>(null);
+  const sectionPositions = useRef<Record<'notes' | 'ai' | 'custody', number>>({
+    notes: 0,
+    ai: 0,
+    custody: 0,
+  });
 
   const [caseData, setCaseData] = useState<CaseItem | null>(null);
   const [files, setFiles] = useState<EvidenceFile[]>([]);
@@ -130,6 +138,7 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const [isCustodyOpen, setIsCustodyOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [isAiOpen, setIsAiOpen] = useState(false);
+  const [isPresentationOpen, setIsPresentationOpen] = useState(false);
 
   const totalFiles = files.length;
   const processedFiles = files.filter((file) => file.status === 'processed').length;
@@ -144,6 +153,116 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const selectedFileNotes = selectedFile
     ? notes.filter((note) => note.fileRecord?._id === selectedFile._id)
     : [];
+  const fileEventCounts = useMemo(() => {
+    return timelineEvents.reduce<Record<string, number>>((counts, event) => {
+      const fileId = event.fileRecord?._id;
+      if (!fileId) {
+        return counts;
+      }
+
+      counts[fileId] = (counts[fileId] || 0) + 1;
+      return counts;
+    }, {});
+  }, [timelineEvents]);
+  const duplicateHashCounts = useMemo(() => {
+    return files.reduce<Record<string, number>>((counts, file) => {
+      if (!file.sha256Hash) {
+        return counts;
+      }
+
+      counts[file.sha256Hash] = (counts[file.sha256Hash] || 0) + 1;
+      return counts;
+    }, {});
+  }, [files]);
+  const fileRiskItems = useMemo(() => {
+    return files
+      .map((file) => {
+        const reasons: string[] = [];
+        let score = 0;
+        const relatedEvents = fileEventCounts[file._id] || 0;
+
+        if (file.status === 'failed') {
+          score += 38;
+          reasons.push('Extraction failed');
+        }
+
+        if (file.status === 'processing') {
+          score += 18;
+          reasons.push('Extraction still running');
+        }
+
+        if (file.status === 'pending') {
+          score += 14;
+          reasons.push('Metadata not extracted yet');
+        }
+
+        if (!file.sha256Hash) {
+          score += 28;
+          reasons.push('Missing SHA-256 hash');
+        }
+
+        if (file.errorReason) {
+          score += 18;
+          reasons.push(file.errorReason);
+        }
+
+        if (file.status === 'processed' && relatedEvents === 0) {
+          score += 18;
+          reasons.push('No timeline events extracted');
+        }
+
+        if (file.sha256Hash && duplicateHashCounts[file.sha256Hash] > 1) {
+          score += 16;
+          reasons.push('Duplicate hash appears in this case');
+        }
+
+        if (file.fileSize === 0) {
+          score += 20;
+          reasons.push('Zero-byte evidence file');
+        }
+
+        return {
+          file,
+          score: Math.min(score, 100),
+          reasons: reasons.length ? reasons : ['No obvious risk indicators'],
+          relatedEvents,
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+  }, [duplicateHashCounts, fileEventCounts, files]);
+  const caseRiskScore = useMemo(() => {
+    if (!fileRiskItems.length) {
+      return 0;
+    }
+
+    const fileAverage = fileRiskItems.reduce((sum, item) => sum + item.score, 0) / fileRiskItems.length;
+    const failedWeight = totalFiles ? (failedFiles / totalFiles) * 28 : 0;
+    const pendingWeight = totalFiles ? (pendingFiles / totalFiles) * 12 : 0;
+    const noteWeight = notes.filter((note) => note.findingType === 'suspicious' || note.findingType === 'contradiction').length * 6;
+
+    return Math.min(Math.round(fileAverage + failedWeight + pendingWeight + noteWeight), 100);
+  }, [failedFiles, fileRiskItems, notes, pendingFiles, totalFiles]);
+  const riskTone =
+    caseRiskScore >= 70
+      ? theme.colors.status.error
+      : caseRiskScore >= 38
+        ? theme.colors.status.warning
+        : theme.colors.status.success;
+  const riskLabel =
+    caseRiskScore >= 70
+      ? 'High Risk'
+      : caseRiskScore >= 38
+        ? 'Needs Review'
+        : 'Low Risk';
+  const sortedTimelineEvents = useMemo(() => {
+    return [...timelineEvents].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+  }, [timelineEvents]);
+  const suspiciousNotes = notes.filter(
+    (note) => note.findingType === 'suspicious' || note.findingType === 'contradiction' || note.findingType === 'needs_review'
+  );
+  const topRiskFiles = fileRiskItems.slice(0, 3);
   const findingOptions: Array<{ value: FindingType; label: string }> = [
     { value: 'general', label: 'General' },
     { value: 'suspicious', label: 'Suspicious' },
@@ -189,6 +308,35 @@ export const CaseDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadCaseDetails(false);
+  };
+
+  const rememberSectionPosition = (
+    section: 'notes' | 'ai' | 'custody',
+    event: LayoutChangeEvent
+  ) => {
+    sectionPositions.current[section] = event.nativeEvent.layout.y;
+  };
+
+  const scrollToSection = (section: 'notes' | 'ai' | 'custody') => {
+    requestAnimationFrame(() => {
+      const y = Math.max(sectionPositions.current[section] - 18, 0);
+      scrollRef.current?.scrollTo({ y, animated: true });
+    });
+  };
+
+  const openNotesSection = () => {
+    setIsNotesOpen(true);
+    scrollToSection('notes');
+  };
+
+  const openCustodySection = () => {
+    setIsCustodyOpen(true);
+    scrollToSection('custody');
+  };
+
+  const openAiSection = () => {
+    setIsAiOpen(true);
+    scrollToSection('ai');
   };
 
   const waitForExtractionToFinish = async () => {
@@ -376,7 +524,7 @@ const handleDeleteCase = () => {
   const handleGenerateAiSummary = async () => {
     try {
       setGeneratingAiSummary(true);
-      setIsAiOpen(true);
+      openAiSection();
       setAiError('');
       const result = await generateAiCaseSummary(caseId);
       setAiAnalysis(result.analysis);
@@ -637,6 +785,18 @@ const handleDeleteCase = () => {
     }
 
     return <FileText size={16} color={theme.colors.primary} />;
+  };
+
+  const getRiskColor = (score: number) => {
+    if (score >= 70) {
+      return theme.colors.status.error;
+    }
+
+    if (score >= 38) {
+      return theme.colors.status.warning;
+    }
+
+    return theme.colors.status.success;
   };
 
   const renderStatCard = (
@@ -929,6 +1089,208 @@ const handleDeleteCase = () => {
     <ScreenWrapper withSidebar>
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Modal
+          visible={isPresentationOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsPresentationOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View
+              style={[
+                styles.presentationModal,
+                {
+                  backgroundColor: theme.colors.background,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <View style={styles.presentationTopBar}>
+                <View style={styles.headerText}>
+                  <Text style={[styles.label, { color: theme.colors.text.secondary }]}>
+                    Forensic Presentation Mode
+                  </Text>
+                  <Text style={[styles.presentationTitle, { color: theme.colors.text.primary }]}>
+                    {caseData?.title || 'Case Briefing'}
+                  </Text>
+                  <Text style={[styles.sectionSubtitle, { color: theme.colors.text.secondary }]}>
+                    A judge-friendly story view of evidence health, risk, timeline activity, and next steps.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setIsPresentationOpen(false)}
+                  style={[styles.modalCloseButton, { borderColor: theme.colors.border }]}
+                >
+                  <XCircle size={18} color={theme.colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <LinearGradient
+                  colors={[`${theme.colors.primary}24`, `${riskTone}18`]}
+                  style={[styles.presentationHero, { borderColor: theme.colors.border }]}
+                >
+                  <View style={styles.presentationHeroText}>
+                    <Text style={[styles.presentationKicker, { color: theme.colors.primary }]}>
+                      CASE #{caseId.slice(-6).toUpperCase()}
+                    </Text>
+                    <Text style={[styles.presentationHeadline, { color: theme.colors.text.primary }]}>
+                      {riskLabel} investigation profile
+                    </Text>
+                    <Text style={[styles.presentationSubcopy, { color: theme.colors.text.secondary }]}>
+                      {totalFiles} evidence file{totalFiles === 1 ? '' : 's'}, {totalEvents} extracted event{totalEvents === 1 ? '' : 's'}, {custodyEntries.length} custody record{custodyEntries.length === 1 ? '' : 's'}, and {notes.length} investigator note{notes.length === 1 ? '' : 's'}.
+                    </Text>
+                  </View>
+
+                  <View style={[styles.presentationRiskBadge, { borderColor: riskTone }]}>
+                    <Text style={[styles.presentationRiskValue, { color: riskTone }]}>
+                      {caseRiskScore}
+                    </Text>
+                    <Text style={[styles.presentationRiskLabel, { color: theme.colors.text.secondary }]}>
+                      Risk Score
+                    </Text>
+                  </View>
+                </LinearGradient>
+
+                <View style={styles.presentationMetricGrid}>
+                  <View style={[styles.presentationMetricCard, { backgroundColor: theme.colors.panel, borderColor: theme.colors.border }]}>
+                    <FileText size={19} color={theme.colors.primary} />
+                    <Text style={[styles.presentationMetricValue, { color: theme.colors.text.primary }]}>
+                      {processedFiles}/{totalFiles || 0}
+                    </Text>
+                    <Text style={[styles.presentationMetricLabel, { color: theme.colors.text.secondary }]}>
+                      Evidence processed
+                    </Text>
+                  </View>
+
+                  <View style={[styles.presentationMetricCard, { backgroundColor: theme.colors.panel, borderColor: theme.colors.border }]}>
+                    <AlertTriangle size={19} color={failedFiles ? theme.colors.status.error : theme.colors.status.success} />
+                    <Text style={[styles.presentationMetricValue, { color: theme.colors.text.primary }]}>
+                      {failedFiles}
+                    </Text>
+                    <Text style={[styles.presentationMetricLabel, { color: theme.colors.text.secondary }]}>
+                      Failed extractions
+                    </Text>
+                  </View>
+
+                  <View style={[styles.presentationMetricCard, { backgroundColor: theme.colors.panel, borderColor: theme.colors.border }]}>
+                    <Star size={19} color={theme.colors.status.warning} />
+                    <Text style={[styles.presentationMetricValue, { color: theme.colors.text.primary }]}>
+                      {bookmarkedEvents.length}
+                    </Text>
+                    <Text style={[styles.presentationMetricLabel, { color: theme.colors.text.secondary }]}>
+                      Bookmarked events
+                    </Text>
+                  </View>
+
+                  <View style={[styles.presentationMetricCard, { backgroundColor: theme.colors.panel, borderColor: theme.colors.border }]}>
+                    <MessageSquare size={19} color={theme.colors.primary} />
+                    <Text style={[styles.presentationMetricValue, { color: theme.colors.text.primary }]}>
+                      {suspiciousNotes.length}
+                    </Text>
+                    <Text style={[styles.presentationMetricLabel, { color: theme.colors.text.secondary }]}>
+                      Review findings
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.presentationColumns}>
+                  <View style={[styles.presentationPanel, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                    <Text style={[styles.presentationPanelTitle, { color: theme.colors.text.primary }]}>
+                      Evidence Risk Leaderboard
+                    </Text>
+                    {(topRiskFiles.length ? topRiskFiles : fileRiskItems).slice(0, 4).map((item, index) => (
+                      <View key={item.file._id} style={styles.presentationRiskRow}>
+                        <View style={[styles.presentationRank, { backgroundColor: `${getRiskColor(item.score)}18` }]}>
+                          <Text style={[styles.presentationRankText, { color: getRiskColor(item.score) }]}>
+                            {index + 1}
+                          </Text>
+                        </View>
+                        <View style={styles.headerText}>
+                          <Text numberOfLines={1} style={[styles.presentationRowTitle, { color: theme.colors.text.primary }]}>
+                            {item.file.originalName}
+                          </Text>
+                          <Text numberOfLines={2} style={[styles.presentationRowMeta, { color: theme.colors.text.secondary }]}>
+                            {item.reasons.join(' - ')}
+                          </Text>
+                        </View>
+                        <Text style={[styles.presentationRowScore, { color: getRiskColor(item.score) }]}>
+                          {item.score}
+                        </Text>
+                      </View>
+                    ))}
+
+                    {!files.length ? (
+                      <Text style={[styles.aiMutedText, { color: theme.colors.text.muted }]}>
+                        No evidence uploaded yet.
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  <View style={[styles.presentationPanel, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                    <Text style={[styles.presentationPanelTitle, { color: theme.colors.text.primary }]}>
+                      Timeline Story Beats
+                    </Text>
+                    {sortedTimelineEvents.slice(0, 2).map((event) => (
+                      <View key={`start-${event._id}`} style={styles.presentationStoryRow}>
+                        <Clock size={16} color={theme.colors.primary} />
+                        <View style={styles.headerText}>
+                          <Text style={[styles.presentationRowTitle, { color: theme.colors.text.primary }]}>
+                            {event.title || event.eventType}
+                          </Text>
+                          <Text style={[styles.presentationRowMeta, { color: theme.colors.text.secondary }]}>
+                            {formatDateTime(event.timestamp)} - {event.fileRecord?.originalName || event.eventSource}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+
+                    {sortedTimelineEvents.slice(-2).map((event) => (
+                      <View key={`end-${event._id}`} style={styles.presentationStoryRow}>
+                        <BarChart3 size={16} color={theme.colors.status.warning} />
+                        <View style={styles.headerText}>
+                          <Text style={[styles.presentationRowTitle, { color: theme.colors.text.primary }]}>
+                            {event.title || event.eventType}
+                          </Text>
+                          <Text style={[styles.presentationRowMeta, { color: theme.colors.text.secondary }]}>
+                            {formatDateTime(event.timestamp)} - {event.fileRecord?.originalName || event.eventSource}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+
+                    {!sortedTimelineEvents.length ? (
+                      <Text style={[styles.aiMutedText, { color: theme.colors.text.muted }]}>
+                        Run metadata extraction to build the story beats.
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                <View style={[styles.presentationPanel, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                  <Text style={[styles.presentationPanelTitle, { color: theme.colors.text.primary }]}>
+                    Case Briefing Highlights
+                  </Text>
+                  <Text style={[styles.presentationBullet, { color: theme.colors.text.secondary }]}>
+                    1. Evidence files are preserved with SHA-256 hashes for integrity tracking.
+                  </Text>
+                  <Text style={[styles.presentationBullet, { color: theme.colors.text.secondary }]}>
+                    2. Metadata extraction converts documents, images, text, and logs into a unified forensic timeline.
+                  </Text>
+                  <Text style={[styles.presentationBullet, { color: theme.colors.text.secondary }]}>
+                    3. Risk scoring prioritizes failed extractions, sparse timeline coverage, duplicate hashes, and investigator review items.
+                  </Text>
+                  <Text style={[styles.presentationBullet, { color: theme.colors.text.secondary }]}>
+                    4. Chain of custody records and investigator notes keep the case explainable and auditable.
+                  </Text>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
           visible={Boolean(selectedFile)}
           transparent
           animationType="fade"
@@ -1153,6 +1515,7 @@ const handleDeleteCase = () => {
         </Modal>
 
         <ScrollView
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
           refreshControl={
@@ -1241,6 +1604,13 @@ const handleDeleteCase = () => {
               <BarChart3 size={20} color={theme.colors.primary} />,
               theme.colors.primary
             )}
+
+            {renderStatCard(
+              'Evidence Risk',
+              `${caseRiskScore}/100`,
+              <ShieldCheck size={20} color={riskTone} />,
+              riskTone
+            )}
           </View>
 
           <View
@@ -1322,25 +1692,37 @@ const handleDeleteCase = () => {
 
               <TouchableOpacity
                 style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
-                onPress={() => setIsCustodyOpen((current) => !current)}
+                onPress={() => setIsPresentationOpen(true)}
                 disabled={deleting || updatingStatus}
                 activeOpacity={0.85}
               >
-                <History size={17} color={theme.colors.text.primary} />
+                <PlayCircle size={17} color={theme.colors.text.primary} />
                 <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
-                  {isCustodyOpen ? 'Hide Chain of Custody' : 'View Chain of Custody'}
+                  Present Case
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
-                onPress={() => setIsNotesOpen((current) => !current)}
+                onPress={openCustodySection}
+                disabled={deleting || updatingStatus}
+                activeOpacity={0.85}
+              >
+                <History size={17} color={theme.colors.text.primary} />
+                <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
+                  View Chain of Custody
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
+                onPress={openNotesSection}
                 disabled={deleting || updatingStatus}
                 activeOpacity={0.85}
               >
                 <MessageSquare size={17} color={theme.colors.text.primary} />
                 <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
-                  {isNotesOpen ? 'Hide Notes' : 'View Notes'}
+                  View Notes
                 </Text>
               </TouchableOpacity>
 
@@ -1364,7 +1746,7 @@ const handleDeleteCase = () => {
 
               <TouchableOpacity
                 style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
-                onPress={handleGenerateAiSummary}
+                onPress={aiAnalysis || aiError ? openAiSection : handleGenerateAiSummary}
                 disabled={deleting || updatingStatus || generatingAiSummary}
                 activeOpacity={0.85}
               >
@@ -1434,6 +1816,82 @@ const handleDeleteCase = () => {
             </View>
           </View>
 
+          <View
+            style={[
+              styles.riskPanel,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <View style={styles.riskHeader}>
+              <View style={[styles.riskScoreRing, { borderColor: riskTone, backgroundColor: `${riskTone}14` }]}>
+                <Text style={[styles.riskScoreText, { color: riskTone }]}>{caseRiskScore}</Text>
+                <Text style={[styles.riskScoreLabel, { color: theme.colors.text.muted }]}>RISK</Text>
+              </View>
+
+              <View style={styles.headerText}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+                  Evidence Risk Snapshot
+                </Text>
+                <Text style={[styles.sectionSubtitle, { color: theme.colors.text.secondary }]}>
+                  {riskLabel} based on extraction status, hash signals, timeline coverage, and investigator findings.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setIsPresentationOpen(true)}
+                style={[styles.presentationMiniButton, { borderColor: theme.colors.border }]}
+              >
+                <PlayCircle size={16} color={theme.colors.text.primary} />
+                <Text style={[styles.secondaryButtonText, { color: theme.colors.text.primary }]}>
+                  Present
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.riskGrid}>
+              {(topRiskFiles.length ? topRiskFiles : fileRiskItems.slice(0, 1)).map((item) => (
+                <View
+                  key={item.file._id}
+                  style={[
+                    styles.riskFileCard,
+                    {
+                      borderColor: `${getRiskColor(item.score)}55`,
+                      backgroundColor: theme.colors.panel,
+                    },
+                  ]}
+                >
+                  <View style={styles.riskFileHeader}>
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.riskFileName, { color: theme.colors.text.primary }]}
+                    >
+                      {item.file.originalName}
+                    </Text>
+                    <Text style={[styles.riskFileScore, { color: getRiskColor(item.score) }]}>
+                      {item.score}/100
+                    </Text>
+                  </View>
+                  <Text numberOfLines={2} style={[styles.riskReasonText, { color: theme.colors.text.secondary }]}>
+                    {item.reasons.join(' • ')}
+                  </Text>
+                  <Text style={[styles.riskMetaText, { color: theme.colors.text.muted }]}>
+                    {item.relatedEvents} event{item.relatedEvents === 1 ? '' : 's'} linked • {item.file.status}
+                  </Text>
+                </View>
+              ))}
+
+              {!files.length ? (
+                <Text style={[styles.riskReasonText, { color: theme.colors.text.secondary }]}>
+                  Upload evidence to generate a case risk profile.
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
           <View style={styles.filesHeader}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
               Evidence Files
@@ -1479,6 +1937,7 @@ const handleDeleteCase = () => {
                 borderColor: theme.colors.border,
               },
             ]}
+            onLayout={(event) => rememberSectionPosition('notes', event)}
             onPress={() => setIsNotesOpen((current) => !current)}
             activeOpacity={0.85}
           >
@@ -1662,6 +2121,7 @@ const handleDeleteCase = () => {
                 borderColor: theme.colors.border,
               },
             ]}
+            onLayout={(event) => rememberSectionPosition('ai', event)}
             onPress={() => setIsAiOpen((current) => !current)}
             activeOpacity={0.85}
           >
@@ -1833,6 +2293,7 @@ const handleDeleteCase = () => {
                 borderColor: theme.colors.border,
               },
             ]}
+            onLayout={(event) => rememberSectionPosition('custody', event)}
             onPress={() => setIsCustodyOpen((current) => !current)}
             activeOpacity={0.85}
           >
@@ -2061,6 +2522,81 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  riskPanel: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 26,
+  },
+  riskHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  riskScoreRing: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  riskScoreText: {
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  riskScoreLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  presentationMiniButton: {
+    minHeight: 40,
+    borderRadius: 12,
+    paddingHorizontal: 13,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 7,
+  },
+  riskGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 16,
+  },
+  riskFileCard: {
+    flex: 1,
+    minWidth: 220,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+  },
+  riskFileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  riskFileName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  riskFileScore: {
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  riskReasonText: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 7,
+  },
+  riskMetaText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 7,
   },
   filesHeader: {
     marginBottom: 14,
@@ -2486,6 +3022,150 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 14,
     padding: 18,
+  },
+  presentationModal: {
+    width: '100%',
+    maxWidth: 1040,
+    maxHeight: '92%',
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 18,
+  },
+  presentationTopBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    marginBottom: 14,
+  },
+  presentationTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+  },
+  presentationHero: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+    marginBottom: 14,
+  },
+  presentationHeroText: {
+    flex: 1,
+  },
+  presentationKicker: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    marginBottom: 8,
+  },
+  presentationHeadline: {
+    fontSize: 30,
+    lineHeight: 36,
+    fontWeight: '900',
+  },
+  presentationSubcopy: {
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 9,
+  },
+  presentationRiskBadge: {
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  presentationRiskValue: {
+    fontSize: 38,
+    fontWeight: '900',
+  },
+  presentationRiskLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  presentationMetricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 14,
+  },
+  presentationMetricCard: {
+    flex: 1,
+    minWidth: 170,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    gap: 7,
+  },
+  presentationMetricValue: {
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  presentationMetricLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  presentationColumns: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  presentationPanel: {
+    flex: 1,
+    minWidth: 300,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 15,
+    marginBottom: 14,
+  },
+  presentationPanelTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    marginBottom: 12,
+  },
+  presentationRiskRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  presentationRank: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  presentationRankText: {
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  presentationRowTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  presentationRowMeta: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  presentationRowScore: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  presentationStoryRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    marginBottom: 12,
+  },
+  presentationBullet: {
+    fontSize: 13,
+    lineHeight: 21,
+    marginBottom: 6,
   },
   modalHeader: {
     flexDirection: 'row',
