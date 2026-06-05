@@ -31,6 +31,7 @@ const buildTransporter = () => {
     host: config.host,
     port: config.port,
     secure: config.secure,
+    family: 4, // force IPv4 to avoid Render IPv6 ENETUNREACH issues
     auth: {
       user: config.user,
       pass: config.pass,
