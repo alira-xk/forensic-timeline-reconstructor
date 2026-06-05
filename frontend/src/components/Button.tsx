@@ -74,7 +74,7 @@ export const Button: React.FC<ButtonProps> = ({
                     backgroundColor: getBackgroundColor(),
                     borderColor: getBorderColor(),
                     borderWidth: variant === 'outline' || variant === 'secondary' || variant === 'danger' ? 1 : 0,
-                    borderRadius: theme.borderRadius.lg,
+                    borderRadius: theme.borderRadius.md,
                     overflow: 'hidden',
                     opacity: disabled ? 0.62 : 1,
                 },

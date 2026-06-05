@@ -1,28 +1,32 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { CompositeScreenProps } from '@react-navigation/native';
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ChevronLeft, FolderPlus } from 'lucide-react-native';
+import { ArrowLeft, CheckCircle, Database } from 'lucide-react-native';
 
 import { ScreenWrapper } from '../components/ScreenWrapper';
+import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
-import { Input } from '../components/Input';
 import { useTheme } from '../theme/ThemeContext';
-import { RootStackParamList } from '../types/navigation';
 import { createCase } from '../services/caseService';
+import { RootStackParamList, MainTabParamList } from '../types/navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateCase'>;
 
 export const CreateCaseScreen: React.FC<Props> = ({ navigation }) => {
   const { theme } = useTheme();
-
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,179 +39,152 @@ export const CreateCaseScreen: React.FC<Props> = ({ navigation }) => {
 
     try {
       setLoading(true);
-
-      await createCase({
+      const newCase = await createCase({
         title: title.trim(),
         description: description.trim(),
-        status: 'open',
       });
-
-      Alert.alert('Success', 'Case created successfully.');
-      navigation.goBack();
+      navigation.navigate('CaseDetail', { caseId: newCase._id });
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create case.');
+      Alert.alert('Error', error.message || 'Failed to create case');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScreenWrapper>
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
+    <ScreenWrapper fullWidth withSidebar={true}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <TouchableOpacity
-            style={styles.backButton}
+            activeOpacity={0.7}
             onPress={() => navigation.goBack()}
-            activeOpacity={0.8}
+            style={styles.backButton}
           >
-            <ChevronLeft size={20} color={theme.colors.text.secondary} />
-            <Text style={[styles.backText, { color: theme.colors.text.secondary }]}>
-              Back to Cases
-            </Text>
+            <ArrowLeft size={20} color={theme.colors.text.secondary} />
+            <Text style={[styles.backText, { color: theme.colors.text.secondary }]}>Back</Text>
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <View style={[styles.iconBox, { backgroundColor: theme.colors.primary }]}>
-              <FolderPlus size={28} color="#FFFFFF" />
+            <View style={[styles.iconWrapper, { backgroundColor: `${theme.colors.primary}1A` }]}>
+              <Database size={28} color={theme.colors.primary} />
             </View>
-
-            <View style={styles.headerText}>
-              <Text style={[styles.title, { color: theme.colors.text.primary }]}>
-                Create Case
-              </Text>
-              <Text style={[styles.subtitle, { color: theme.colors.text.secondary }]}>
-                Create an investigation case before uploading evidence files.
-              </Text>
-            </View>
+            <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>
+              Initiate Investigation
+            </Text>
+            <Text style={[styles.headerSubtitle, { color: theme.colors.text.secondary }]}>
+              Create a secure, isolated container for your forensic artifacts and timelines.
+            </Text>
           </View>
 
-          <Card style={styles.card}>
-            <Text style={[styles.cardTitle, { color: theme.colors.text.primary }]}>
-              Case Information
-            </Text>
-
-            <Text style={[styles.cardSubtitle, { color: theme.colors.text.secondary }]}>
-              This case will be saved in MongoDB and used for evidence upload,
-              metadata extraction, and timeline reconstruction.
-            </Text>
-
+          <Card glass style={styles.formCard}>
             <Input
-              label="CASE TITLE"
+              label="Case Title"
+              placeholder="e.g. Operation Lighthouse, Incident #9921"
               value={title}
               onChangeText={setTitle}
-              placeholder="e.g. Suspicious Login Investigation"
+              autoCapitalize="words"
+              editable={!loading}
             />
 
             <Input
-              label="CASE DESCRIPTION"
+              label="Case Description (Optional)"
+              placeholder="Provide a brief summary of the investigation scope..."
               value={description}
               onChangeText={setDescription}
-              placeholder="Write a short description about this investigation..."
               multiline
+              numberOfLines={4}
+              editable={!loading}
               textAlignVertical="top"
-              style={styles.textArea}
+              containerStyle={{ marginTop: 8 }}
+              style={{ minHeight: 100 }}
             />
 
-            <View style={styles.actions}>
-              <Button
-                title="Cancel"
-                variant="secondary"
-                onPress={() => navigation.goBack()}
-                disabled={loading}
-                style={styles.actionButton}
-              />
-
-              <Button
-                title="Create Case"
-                onPress={handleCreateCase}
-                isLoading={loading}
-                style={styles.actionButton}
-              />
+            <View style={styles.infoBox}>
+              <CheckCircle size={16} color={theme.colors.status.success} style={{ marginRight: 8 }} />
+              <Text style={[styles.infoText, { color: theme.colors.text.muted }]}>
+                Data is encrypted and logged for auditing upon creation.
+              </Text>
             </View>
+
+            <Button
+              title="Create Case Workspace"
+              onPress={handleCreateCase}
+              isLoading={loading}
+              size="lg"
+              style={styles.submitBtn}
+            />
           </Card>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     </ScreenWrapper>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    width: '100%',
-    maxWidth: 900,
+  content: {
+    padding: 24,
+    paddingBottom: 48,
+    maxWidth: 600,
     alignSelf: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 30,
-    paddingBottom: 40,
+    width: '100%',
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 32,
     alignSelf: 'flex-start',
-    marginBottom: 24,
   },
   backText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    marginLeft: 6,
+    marginLeft: 8,
   },
   header: {
-    flexDirection: 'row',
+    marginBottom: 32,
     alignItems: 'center',
-    marginBottom: 28,
+    textAlign: 'center',
   },
-  iconBox: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
-    alignItems: 'center',
+  iconWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     justifyContent: 'center',
-    marginRight: 16,
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  headerText: {
-    flex: 1,
-  },
-  title: {
+  headerTitle: {
     fontSize: 28,
     fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: -0.5,
+    marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 14,
-    marginTop: 5,
-    lineHeight: 20,
+  headerSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+    maxWidth: '80%',
   },
-  card: {
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 24,
+  formCard: {
+    padding: 32,
   },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    marginTop: 8,
-    lineHeight: 21,
-    marginBottom: 24,
-  },
-  textArea: {
-    minHeight: 130,
-    lineHeight: 20,
-  },
-  actions: {
+  infoBox: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 10,
-    gap: 12,
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 24,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.02)',
   },
-  actionButton: {
-    minWidth: 140,
+  infoText: {
+    fontSize: 12,
+    flex: 1,
+  },
+  submitBtn: {
+    marginTop: 8,
   },
 });

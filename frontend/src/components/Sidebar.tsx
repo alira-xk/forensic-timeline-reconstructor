@@ -62,506 +62,172 @@ export const Sidebar: React.FC = () => {
   const loadSidebarSummary = async () => {
     try {
       setLoading(true);
-
       const casesData = await getCases();
-
-      const fileResults = await Promise.all(
-        casesData.map((caseItem) => getFilesByCase(caseItem._id))
-      );
-
-      const timelineResults = await Promise.all(
-        casesData.map((caseItem) => getTimelineByCase(caseItem._id))
-      );
-
+      const fileResults = await Promise.all(casesData.map((c) => getFilesByCase(c._id)));
+      const timelineResults = await Promise.all(casesData.map((c) => getTimelineByCase(c._id)));
       setCases(casesData);
       setFiles(fileResults.flat());
       setTimelineEvents(timelineResults.flat());
     } catch {
-      // Keep sidebar quiet if backend is temporarily unavailable.
+      // Background retry silently
     } finally {
       setLoading(false);
     }
   };
 
-  useFocusEffect(
-    React.useCallback(() => {
-      loadSidebarSummary();
-    }, [])
-  );
+  useFocusEffect(React.useCallback(() => { loadSidebarSummary(); }, []));
 
-  const processedFiles = files.filter((file) => file.status === 'processed').length;
-  const pendingFiles = files.filter((file) => file.status === 'pending').length;
-  const failedFiles = files.filter((file) => file.status === 'failed').length;
+  const processedFiles = files.filter((f) => f.status === 'processed').length;
 
- const handleNavigation = (targetRoute: string) => {
-  if (targetRoute === 'Dashboard') {
-    navigation.navigate('Main', {
-      screen: 'Dashboard',
-    });
-    return;
-  }
-
-  if (targetRoute === 'CasesList') {
-    navigation.navigate('Main', {
-      screen: 'CasesList',
-    });
-    return;
-  }
-
-  if (targetRoute === 'Timeline') {
-    const latestCase = cases[0];
-
-    if (latestCase) {
-      navigation.navigate('Timeline', { caseId: latestCase._id });
-    } else {
-      navigation.navigate('Main', {
-        screen: 'Timeline',
-      });
+  const handleNavigation = (targetRoute: string) => {
+    if (targetRoute === 'Dashboard') {
+        navigation.navigate('Main', { screen: 'Dashboard' }); return;
     }
-
-    return;
-  }
-
-  navigation.navigate(targetRoute);
-};
-
-  const handleLogout = async () => {
-    await signOut();
+    if (targetRoute === 'CasesList') {
+        navigation.navigate('Main', { screen: 'CasesList' }); return;
+    }
+    if (targetRoute === 'Timeline') {
+      const latestCase = cases[0];
+      if (latestCase) {
+        navigation.navigate('Timeline', { caseId: latestCase._id });
+      } else {
+        navigation.navigate('Main', { screen: 'Timeline' });
+      }
+      return;
+    }
+    navigation.navigate(targetRoute);
   };
-  
-const isActiveRoute = (targetRoute: string) => {
-  if (targetRoute === 'Dashboard') {
-    return route.name === 'Dashboard';
-  }
 
-  if (targetRoute === 'CasesList') {
-    return route.name === 'CasesList';
-  }
+  const isActiveRoute = (t: string) => route.name === t;
 
-  if (targetRoute === 'Timeline') {
-    return route.name === 'Timeline';
-  }
-
-  return route.name === targetRoute;
-};
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.colors.panelStrong,
-          borderRightColor: theme.colors.border,
-        },
-      ]}
-    >
-      <SettingsPopup
-        visible={showSettings}
-        onClose={() => setShowSettings(false)}
-        anchorPosition={{ bottom: 90, left: 24 }}
-      />
+    <View style={[styles.container, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+      <SettingsPopup visible={showSettings} onClose={() => setShowSettings(false)} anchorPosition={{ bottom: 80, left: 24 }} />
 
+      {/* Header / Logo */}
       <View style={styles.header}>
-        <View style={styles.logoBadge}>
-          <AppLogo size={32} />
-        </View>
-
-        <View>
-          <Text style={[styles.brandTitle, { color: theme.colors.text.primary }]}>
-            Forensic
-          </Text>
-          <Text style={[styles.brandSubtitle, { color: theme.colors.text.secondary }]}>
-            Timeline
-          </Text>
-        </View>
+        <AppLogo />
       </View>
 
-      <View style={styles.navContainer}>
-        {navItems.map((item) => {
-          const active = isActiveRoute(item.route);
-          const Icon = item.icon;
-
-          return (
-            <TouchableOpacity
-              key={item.route}
-              style={[
-                styles.navItem,
-                {
-                  backgroundColor: active ? `${theme.colors.primary}18` : 'transparent',
-                  borderColor: active ? `${theme.colors.primary}55` : 'transparent',
-                },
-              ]}
-              onPress={() => handleNavigation(item.route)}
-              activeOpacity={0.8}
-            >
-              <Icon
-                size={20}
-                color={active ? theme.colors.primary : theme.colors.text.secondary}
-              />
-
-              <Text
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Navigation Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: theme.colors.text.muted }]}>NAVIGATION</Text>
+          {navItems.map((item) => {
+            const active = isActiveRoute(item.route);
+            const Icon = item.icon;
+            return (
+              <TouchableOpacity
+                key={item.route}
                 style={[
-                  styles.navLabel,
-                  {
-                    color: active ? theme.colors.primary : theme.colors.text.secondary,
-                  },
+                  styles.navItem,
+                  active && { backgroundColor: `${theme.colors.primary}15` }
                 ]}
+                onPress={() => handleNavigation(item.route)}
+                activeOpacity={0.7}
               >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+                <Icon size={20} color={active ? theme.colors.primary : theme.colors.text.secondary} />
+                <Text style={[
+                  styles.navText,
+                  { color: active ? theme.colors.primaryStrong : theme.colors.text.primary, fontWeight: active ? '700' : '500' }
+                ]}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-      <ScrollView
-        style={styles.middleScroll}
-        contentContainerStyle={styles.middleContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[styles.statsWidget, { backgroundColor: theme.colors.panel, borderColor: theme.colors.border }]}>
-          <Text style={[styles.statsTitle, { color: theme.colors.text.muted }]}>
-            Case Summary
-          </Text>
-
-          {loading ? (
-            <View style={styles.loadingBox}>
-              <ActivityIndicator color={theme.colors.primary} />
-              <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>
-                Loading...
-              </Text>
-            </View>
+        {/* Global Summary */}
+        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surfaceHighlight, borderColor: theme.colors.border }]}>
+          <Text style={[styles.summaryTitle, { color: theme.colors.text.primary }]}>Workspace Summary</Text>
+          {loading && cases.length === 0 ? (
+            <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 16 }} />
           ) : (
-            <>
-              <View style={styles.statRow}>
-                <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>
-                  Total Cases
-                </Text>
-                <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                  {cases.length}
-                </Text>
+            <View style={styles.summaryStats}>
+              <View style={styles.statItem}>
+                <Database size={16} color={theme.colors.accent} />
+                <View style={styles.statContent}>
+                  <Text style={[styles.statValue, { color: theme.colors.text.primary }]}>{cases.length}</Text>
+                  <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>Total Cases</Text>
+                </View>
               </View>
-
-              <View style={styles.statRow}>
-                <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>
-                  Evidence Files
-                </Text>
-                <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                  {files.length}
-                </Text>
+              <View style={styles.statItem}>
+                <FileText size={16} color={theme.colors.primary} />
+                <View style={styles.statContent}>
+                  <Text style={[styles.statValue, { color: theme.colors.text.primary }]}>{files.length}</Text>
+                  <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>Evidence Files</Text>
+                </View>
               </View>
-
-              <View style={styles.statRow}>
-                <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>
-                  Timeline Events
-                </Text>
-                <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                  {timelineEvents.length}
-                </Text>
+              <View style={styles.statItem}>
+                <Activity size={16} color={theme.colors.status.success} />
+                <View style={styles.statContent}>
+                  <Text style={[styles.statValue, { color: theme.colors.text.primary }]}>{timelineEvents.length}</Text>
+                  <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>Events</Text>
+                </View>
               </View>
-
-              <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
-
-              <View style={styles.statRow}>
-                <Text style={[styles.statLabel, { color: theme.colors.text.muted }]}>
-                  Processed
-                </Text>
-                <Text style={[styles.statValueSmall, { color: theme.colors.status.success }]}>
-                  {processedFiles}
-                </Text>
-              </View>
-
-              <View style={styles.statRow}>
-                <Text style={[styles.statLabel, { color: theme.colors.text.muted }]}>
-                  Pending
-                </Text>
-                <Text style={[styles.statValueSmall, { color: theme.colors.status.warning }]}>
-                  {pendingFiles}
-                </Text>
-              </View>
-
-              <View style={styles.statRow}>
-                <Text style={[styles.statLabel, { color: theme.colors.text.muted }]}>
-                  Failed
-                </Text>
-                <Text style={[styles.statValueSmall, { color: theme.colors.status.error }]}>
-                  {failedFiles}
-                </Text>
-              </View>
-            </>
+            </View>
           )}
         </View>
-
-        <View style={[styles.systemWidget, { backgroundColor: theme.colors.panel, borderColor: theme.colors.border }]}>
-          <Text style={[styles.statsTitle, { color: theme.colors.text.muted }]}>
-            System Status
-          </Text>
-
-          <View style={styles.systemRow}>
-            <Server size={14} color={theme.colors.status.success} />
-            <Text style={[styles.systemLabel, { color: theme.colors.text.secondary }]}>
-              Backend Active
-            </Text>
-          </View>
-
-          <View style={styles.systemRow}>
-            <Database size={14} color={theme.colors.status.success} />
-            <Text style={[styles.systemLabel, { color: theme.colors.text.secondary }]}>
-              MongoDB Connected
-            </Text>
-          </View>
-
-          <View style={styles.systemRow}>
-            <FileText size={14} color={theme.colors.status.success} />
-            <Text style={[styles.systemLabel, { color: theme.colors.text.secondary }]}>
-              Extractor Ready
-            </Text>
-          </View>
-        </View>
+        <View style={{ flex: 1 }} />
       </ScrollView>
 
+      {/* Footer Area */}
       <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
-        <View style={[styles.themeToggle, { borderColor: theme.colors.border }]}>
-          <View style={styles.themeToggleLeft}>
-            {isDark ? (
-              <Moon size={15} color={theme.colors.primary} />
-            ) : (
-              <Sun size={15} color={theme.colors.primary} />
-            )}
-            <Text style={[styles.themeToggleText, { color: theme.colors.text.primary }]}>
+        <View style={styles.themeToggle}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {isDark ? <Moon size={18} color={theme.colors.text.secondary} /> : <Sun size={18} color={theme.colors.text.secondary} />}
+            <Text style={[styles.themeLabel, { color: theme.colors.text.secondary }]}>
               {isDark ? 'Dark Mode' : 'Light Mode'}
             </Text>
           </View>
-
           <Switch
             value={isDark}
             onValueChange={toggleTheme}
-            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-            thumbColor="#FFFFFF"
+            trackColor={{ false: theme.colors.border, true: `${theme.colors.primary}44` }}
+            thumbColor={isDark ? theme.colors.primary : '#fff'}
           />
         </View>
 
-        <TouchableOpacity
-          style={styles.profileItem}
-          onPress={() => setShowSettings(true)}
-          activeOpacity={0.85}
-        >
-          <View style={[styles.avatar, { backgroundColor: `${theme.colors.primary}18` }]}>
-            <User size={16} color={theme.colors.primary} />
+        <View style={styles.userSection}>
+          <View style={[styles.avatar, { backgroundColor: `${theme.colors.primary}22` }]}>
+            <User size={20} color={theme.colors.primary} />
           </View>
-
-          <View style={styles.profileText}>
-            <Text
-              numberOfLines={1}
-              style={[styles.userName, { color: theme.colors.text.primary }]}
-            >
-              {displayName}
-            </Text>
-
-            <Text
-              numberOfLines={1}
-              style={[styles.userEmail, { color: theme.colors.text.muted }]}
-            >
-              {displayEmail}
-            </Text>
+          <View style={styles.userInfo}>
+            <Text style={[styles.userName, { color: theme.colors.text.primary }]} numberOfLines={1}>{displayName}</Text>
+            <Text style={[styles.userRole, { color: theme.colors.text.secondary }]} numberOfLines={1}>Forensic Tech</Text>
           </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.logoutButton, { borderColor: theme.colors.border }]}
-          onPress={handleLogout}
-          activeOpacity={0.85}
-        >
-          <LogOut size={15} color={theme.colors.status.error} />
-          <Text style={[styles.logoutText, { color: theme.colors.status.error }]}>
-            Logout
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity onPress={() => signOut()} style={styles.logoutBtn}>
+            <LogOut size={20} color={theme.colors.text.muted} />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    width: 268,
-    height: '100%',
-    borderRightWidth: 1,
-    paddingVertical: 22,
-    shadowColor: '#000',
-    shadowOffset: { width: 12, height: 0 },
-    shadowOpacity: 0.16,
-    shadowRadius: 26,
-    elevation: 7,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 22,
-    marginBottom: 28,
-  },
-  logoBadge: {
-    marginRight: 14,
-  },
-  brandTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 20,
-  },
-  brandSubtitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0,
-    lineHeight: 18,
-  },
-  navContainer: {
-    paddingHorizontal: 18,
-    gap: 4,
-    marginBottom: 18,
-  },
-  navItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 11,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  navLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0,
-    marginLeft: 12,
-  },
-  middleScroll: {
-    flex: 1,
-  },
-  middleContent: {
-    paddingBottom: 16,
-  },
-  statsWidget: {
-    marginHorizontal: 18,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-  },
-  systemWidget: {
-    marginHorizontal: 18,
-    marginTop: 10,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-  },
-  statsTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0,
-    marginBottom: 12,
-  },
-  loadingBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  loadingText: {
-    marginTop: 8,
-    fontSize: 12,
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 11,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  statValue: {
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  statValueSmall: {
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  divider: {
-    height: 1,
-    marginTop: 2,
-    marginBottom: 12,
-  },
-  systemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-    marginBottom: 10,
-  },
-  systemLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  footer: {
-    marginHorizontal: 18,
-    paddingTop: 14,
-    borderTopWidth: 1,
-  },
-  themeToggle: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingLeft: 12,
-    paddingRight: 8,
-    marginBottom: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  themeToggleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  themeToggleText: {
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  profileItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  profileText: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  userEmail: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  logoutButton: {
-    marginTop: 14,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  logoutText: {
-    fontSize: 12,
-    fontWeight: '900',
-  },
+  container: { width: 280, height: '100%', borderRightWidth: 1, zIndex: 10 },
+  header: { padding: 24, paddingBottom: 16 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 24, flexGrow: 1 },
+  section: { marginBottom: 32 },
+  sectionLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12, paddingHorizontal: 8 },
+  navItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 4 },
+  navText: { fontSize: 15, marginLeft: 12 },
+  summaryCard: { padding: 16, borderRadius: 16, borderWidth: 1 },
+  summaryTitle: { fontSize: 13, fontWeight: '700', marginBottom: 16 },
+  summaryStats: { gap: 16 },
+  statItem: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  statContent: { flex: 1 },
+  statValue: { fontSize: 16, fontWeight: '800' },
+  statLabel: { fontSize: 12 },
+  footer: { padding: 16, borderTopWidth: 1 },
+  themeToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, marginBottom: 8 },
+  themeLabel: { fontSize: 14, fontWeight: '500', marginLeft: 12 },
+  userSection: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12 },
+  avatar: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  userInfo: { flex: 1, marginLeft: 12 },
+  userName: { fontSize: 14, fontWeight: '700' },
+  userRole: { fontSize: 12, marginTop: 2 },
+  logoutBtn: { padding: 8 },
 });

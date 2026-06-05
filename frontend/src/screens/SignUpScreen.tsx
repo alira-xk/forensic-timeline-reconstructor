@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -31,6 +32,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SignUp'>;
 export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
   const { theme, toggleTheme, isDark } = useTheme();
   const { signUp } = useAuth();
+  const { width } = useWindowDimensions();
 
   const initialEmail = route.params?.email || '';
 
@@ -236,6 +238,7 @@ export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
             style={[
               styles.formCard,
               {
+                width: Math.min(460, Math.max(280, width - 48)),
                 backgroundColor: theme.colors.surface,
                 borderColor: theme.colors.border,
                 shadowColor: theme.shadows.card.shadowColor,
@@ -455,8 +458,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   formCard: {
-    width: '100%',
+    alignSelf: 'center',
     maxWidth: 460,
+    minWidth: 0,
+    flexShrink: 1,
     borderWidth: 1,
     borderRadius: 20,
     padding: 24,
@@ -467,6 +472,7 @@ const styles = StyleSheet.create({
       height: 10,
     },
     elevation: 6,
+    ...Platform.select({ web: { boxSizing: 'border-box' } as any }),
   },
   backButton: {
     flexDirection: 'row',
@@ -487,6 +493,7 @@ const styles = StyleSheet.create({
   },
   cardHeaderText: {
     flex: 1,
+    minWidth: 0,
   },
   cardIcon: {
     width: 40,

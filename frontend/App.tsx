@@ -4,6 +4,7 @@ import { AppNavigator } from './src/navigation';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { AuthProvider } from './src/auth/AuthContext';
+import { ConfirmationDialog } from './src/components/ConfirmationDialog';
 
 const AppContent = () => {
   const { isDark } = useTheme();
@@ -11,6 +12,7 @@ const AppContent = () => {
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AppNavigator />
+      <ConfirmationDialog />
     </>
   );
 };

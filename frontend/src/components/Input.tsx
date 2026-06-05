@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+    Platform,
     View,
     TextInput,
     Text,
@@ -91,6 +92,9 @@ export const Input: React.FC<InputProps> = ({ label, error, style, secureTextEnt
 const styles = StyleSheet.create({
     container: {
         marginBottom: 16,
+        alignSelf: 'stretch',
+        minWidth: 0,
+        ...Platform.select({ web: { boxSizing: 'border-box' } as any }),
     },
     label: {
         fontSize: 12,
@@ -101,6 +105,9 @@ const styles = StyleSheet.create({
     inputWrapper: {
         position: 'relative',
         justifyContent: 'center',
+        alignSelf: 'stretch',
+        minWidth: 0,
+        ...Platform.select({ web: { boxSizing: 'border-box' } as any }),
     },
     input: {
         minHeight: 48,
@@ -110,6 +117,9 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         fontSize: 14,
         fontWeight: '600',
+        alignSelf: 'stretch',
+        minWidth: 0,
+        ...Platform.select({ web: { boxSizing: 'border-box' } as any }),
     },
     passwordInput: {
         paddingRight: 44,

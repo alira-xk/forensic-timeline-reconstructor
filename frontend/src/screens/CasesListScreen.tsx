@@ -1,32 +1,28 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
-  RefreshControl,
-  ScrollView,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { CompositeScreenProps, useFocusEffect } from '@react-navigation/native';
-import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import {
-  AlertCircle,
-  ChevronRight,
-  Database,
-  Folder,
-  FolderPlus,
-  RefreshCcw,
-} from 'lucide-react-native';
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { Calendar, ChevronRight, FolderOpen, Plus, RefreshCcw, Search } from 'lucide-react-native';
 
 import { ScreenWrapper } from '../components/ScreenWrapper';
-import { Card } from '../components/Card';
 import { SearchInput } from '../components/SearchInput';
+import { Card } from '../components/Card';
+import { Button } from '../components/Button';
+import { ListSkeleton } from '../components/Skeleton';
 import { useTheme } from '../theme/ThemeContext';
-import { RootStackParamList, MainTabParamList } from '../types/navigation';
 import { getCases, CaseItem } from '../services/caseService';
+import { RootStackParamList, MainTabParamList } from '../types/navigation';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'CasesList'>,
@@ -35,263 +31,140 @@ type Props = CompositeScreenProps<
 
 export const CasesListScreen: React.FC<Props> = ({ navigation }) => {
   const { theme } = useTheme();
-
-  const [search, setSearch] = useState('');
+  const { width } = useWindowDimensions();
+  const isWide = Platform.OS === 'web' && width >= 1120;
+  const [searchQuery, setSearchQuery] = useState('');
   const [cases, setCases] = useState<CaseItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
 
-  const loadCases = async (showLoader = true) => {
+  const fetchCases = async () => {
     try {
-      if (showLoader) {
-        setLoading(true);
-      }
-
-      setError('');
+      setLoading(true);
       const data = await getCases();
       setCases(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load cases.');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to load cases');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
   useFocusEffect(
     useCallback(() => {
-      loadCases(true);
+      fetchCases();
     }, [])
   );
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadCases(false);
-  };
-
   const filteredCases = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
+    if (!searchQuery.trim()) return cases;
+    const q = searchQuery.toLowerCase();
+    return cases.filter(
+      (c) =>
+        c.title.toLowerCase().includes(q) ||
+        (c.description && c.description.toLowerCase().includes(q)) ||
+        c.status.toLowerCase().includes(q)
+    );
+  }, [cases, searchQuery]);
 
-    if (!keyword) {
-      return cases;
-    }
+  const renderCaseItem = ({ item }: { item: CaseItem }) => {
+    const isActive = item.status === 'open';
 
-    return cases.filter((item) => {
-      const title = item.title?.toLowerCase() || '';
-      const description = item.description?.toLowerCase() || '';
-      const status = item.status?.toLowerCase() || '';
-
-      return (
-        title.includes(keyword) ||
-        description.includes(keyword) ||
-        status.includes(keyword) ||
-        item._id.toLowerCase().includes(keyword)
-      );
-    });
-  }, [cases, search]);
-
-  const formatDate = (dateValue: string) => {
-    if (!dateValue) {
-      return 'N/A';
-    }
-
-    return new Date(dateValue).toLocaleDateString();
-  };
-
-  const getStatusColor = (status: string) => {
-    if (status === 'open' || status === 'in_progress') {
-      return theme.colors.status.success;
-    }
-
-    if (status === 'archived') {
-      return theme.colors.status.warning;
-    }
-
-    if (status === 'closed') {
-      return theme.colors.text.secondary;
-    }
-
-    return theme.colors.primary;
-  };
-
-  const renderItem = ({ item }: { item: CaseItem }) => (
-    <TouchableOpacity
-      activeOpacity={0.75}
-      onPress={() => navigation.navigate('CaseDetail', { caseId: item._id })}
-    >
-      <Card style={[styles.caseCard, { borderColor: theme.colors.border }]}>
-        <View style={[styles.caseIcon, { backgroundColor: theme.colors.surfaceHighlight }]}>
-          <Folder size={22} color={theme.colors.primary} />
-        </View>
-
-        <View style={styles.caseInfo}>
-          <View style={styles.titleRow}>
-            <Text
-              numberOfLines={1}
-              style={[styles.caseName, { color: theme.colors.text.primary }]}
-            >
-              {item.title}
-            </Text>
-
-            <View
-              style={[
-                styles.statusBadge,
-                { backgroundColor: `${getStatusColor(item.status)}20` },
-              ]}
-            >
-              <Text style={[styles.statusBadgeText, { color: getStatusColor(item.status) }]}>
-                {item.status.replace('_', ' ')}
-              </Text>
+    return (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        style={styles.caseTouchTarget}
+        onPress={() => navigation.navigate('CaseDetail', { caseId: item._id })}
+      >
+        <Card glass style={styles.caseCard}>
+          <View style={styles.cardInfo}>
+            <View style={styles.iconContainer}>
+              <FolderOpen
+                size={22}
+                color={isActive ? theme.colors.status.success : theme.colors.status.warning}
+              />
             </View>
+            <View style={styles.detailsContainer}>
+              <Text style={[styles.caseTitle, { color: theme.colors.text.primary }]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={[styles.caseDescription, { color: theme.colors.text.secondary }]} numberOfLines={2}>
+                {item.description || 'No description available'}
+              </Text>
+
+              <View style={styles.metaRow}>
+                <View style={[styles.statusBadge, { backgroundColor: isActive ? `${theme.colors.status.success}1A` : `${theme.colors.status.warning}1A` }]}>
+                  <Text style={[styles.statusText, { color: isActive ? theme.colors.status.success : theme.colors.status.warning }]}>
+                    {item.status.toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.dateContainer}>
+                  <Calendar size={12} color={theme.colors.text.muted} style={{ marginRight: 4 }} />
+                  <Text style={[styles.cardDate, { color: theme.colors.text.muted }]}>
+                    {new Date(item.createdAt).toLocaleDateString()}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <ChevronRight size={20} color={theme.colors.text.muted} style={styles.chevron} />
           </View>
-
-          <Text
-            numberOfLines={2}
-            style={[styles.caseDescription, { color: theme.colors.text.secondary }]}
-          >
-            {item.description || 'No description provided.'}
-          </Text>
-
-          <Text style={[styles.caseMeta, { color: theme.colors.text.muted }]}>
-            {item.caseNumber || `Case #${item._id.slice(-6).toUpperCase()}`} - Created: {formatDate(item.createdAt)}
-          </Text>
-        </View>
-
-        <View style={styles.arrowBox}>
-          <ChevronRight size={18} color={theme.colors.text.muted} />
-        </View>
-      </Card>
-    </TouchableOpacity>
-  );
+        </Card>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <ScreenWrapper withSidebar={true}>
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <ScreenWrapper fullWidth withSidebar={true}>
+      <View style={styles.container}>
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={[styles.headerIcon, { backgroundColor: theme.colors.surfaceHighlight }]}>
-              <Database size={22} color={theme.colors.primary} />
-            </View>
-
-            <View>
-              <Text style={[styles.label, { color: theme.colors.text.secondary }]}>
-                Case Database
-              </Text>
-              <Text style={[styles.title, { color: theme.colors.text.primary }]}>
-                All Cases
-              </Text>
-              <Text style={[styles.subtitle, { color: theme.colors.text.secondary }]}>
-                View investigation cases stored in MongoDB.
-              </Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={[styles.createButton, { backgroundColor: theme.colors.primary }]}
-            onPress={() => navigation.navigate('CreateCase')}
-          >
-            <FolderPlus size={17} color="#FFFFFF" />
-            <Text style={styles.createButtonText}>New Case</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={[styles.controlsContainer, { borderBottomColor: theme.colors.border }]}>
-          <SearchInput
-            placeholder="Search by title, description, status, or case ID..."
-            value={search}
-            onChangeText={setSearch}
-          />
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterRow}
-          >
-            <View style={[styles.filterBtnActive, { backgroundColor: theme.colors.surfaceHighlight, borderColor: theme.colors.primary }]}>
-              <Text style={[styles.filterTextActive, { color: theme.colors.primary }]}>
-                Total: {cases.length}
-              </Text>
-            </View>
-
-            <View style={[styles.filterBtn, { borderColor: theme.colors.border }]}>
-              <Text style={[styles.filterText, { color: theme.colors.text.secondary }]}>
-                Showing: {filteredCases.length}
-              </Text>
-            </View>
-
-            <View style={[styles.filterBtn, { borderColor: theme.colors.border }]}>
-              <Text style={[styles.filterText, { color: theme.colors.text.secondary }]}>
-                Sort: Recent
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.refreshButton, { borderColor: theme.colors.border }]}
-              onPress={() => loadCases(true)}
-              activeOpacity={0.8}
-            >
-              <RefreshCcw size={13} color={theme.colors.text.secondary} />
-              <Text style={[styles.filterText, { color: theme.colors.text.secondary }]}>
-                Refresh
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-
-        {loading ? (
-          <View style={styles.centerState}>
-            <ActivityIndicator color={theme.colors.primary} />
-            <Text style={[styles.stateText, { color: theme.colors.text.secondary }]}>
-              Loading cases...
+          <View style={styles.headerCopy}>
+            <Text style={[styles.eyebrow, { color: theme.colors.primary }]}>CASE WORKSPACE</Text>
+            <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>Investigations</Text>
+            <Text style={[styles.headerSubtitle, { color: theme.colors.text.secondary }]}>
+              Search, review, and continue active forensic work.
             </Text>
           </View>
-        ) : error ? (
-          <View style={styles.centerState}>
-            <AlertCircle size={28} color={theme.colors.status.error} />
-            <Text style={[styles.errorText, { color: theme.colors.status.error }]}>
-              {error}
-            </Text>
+          <View style={styles.headerActions}>
             <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => loadCases(true)}
-              style={[styles.retryButton, { borderColor: theme.colors.border }]}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh cases"
+              onPress={fetchCases}
+              style={[styles.iconButton, { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceRaised }]}
             >
-              <Text style={[styles.retryText, { color: theme.colors.text.primary }]}>
-                Try Again
-              </Text>
+              <RefreshCcw size={17} color={theme.colors.text.secondary} />
             </TouchableOpacity>
+            <Button
+              title="New Case"
+              onPress={() => navigation.navigate('CreateCase')}
+              icon={<Plus size={17} color="#FFFFFF" />}
+              style={styles.newCaseButton}
+            />
           </View>
+        </View>
+
+        <SearchInput
+          placeholder="Search by title, description or status..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+
+        {loading && cases.length === 0 ? (
+          <ListSkeleton rows={5} />
         ) : (
           <FlatList
+            key={isWide ? 'wide' : 'single'}
             data={filteredCases}
-            renderItem={renderItem}
+            numColumns={isWide ? 2 : 1}
+            columnWrapperStyle={isWide ? styles.columnWrapper : undefined}
             keyExtractor={(item) => item._id}
-            contentContainerStyle={[
-              styles.list,
-              filteredCases.length === 0 && styles.emptyList,
-            ]}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
+            renderItem={renderCaseItem}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
             ListEmptyComponent={
-              <View style={styles.centerState}>
-                <Folder size={34} color={theme.colors.text.muted} />
-                <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>
-                  No cases found
+              <View style={styles.centerContainer}>
+                <Search size={48} color={theme.colors.text.muted} style={{ marginBottom: 16, opacity: 0.5 }} />
+                <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
+                  {searchQuery ? 'No cases match your search query.' : 'No cases found.\nCreate a case to get started.'}
                 </Text>
-                <Text style={[styles.stateText, { color: theme.colors.text.secondary }]}>
-                  Create a new case or change your search keyword.
-                </Text>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={[styles.createButtonLarge, { backgroundColor: theme.colors.primary }]}
-                  onPress={() => navigation.navigate('CreateCase')}
-                >
-                  <FolderPlus size={17} color="#FFFFFF" />
-                  <Text style={styles.createButtonText}>Create Case</Text>
-                </TouchableOpacity>
               </View>
             }
           />
@@ -304,197 +177,131 @@ export const CasesListScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 24,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingTop: 22,
-    paddingBottom: 16,
+    marginBottom: 24,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    gap: 16,
+    gap: 20,
+    flexWrap: 'wrap',
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
+  headerCopy: {
     flex: 1,
+    minWidth: 240,
   },
-  headerIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  label: {
-    fontSize: 10,
-    fontWeight: '700',
-    marginBottom: 4,
-    letterSpacing: 0,
-  },
-  title: {
-    fontSize: 26,
+  eyebrow: {
+    fontSize: 11,
     fontWeight: '800',
-  },
-  subtitle: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  createButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
-  },
-  createButtonLarge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    borderRadius: 14,
-    marginTop: 18,
-  },
-  createButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  controlsContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  filterRow: {
-    gap: 8,
-    marginTop: 12,
-  },
-  filterBtn: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: 'transparent',
-  },
-  filterBtnActive: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  refreshButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: 'transparent',
-  },
-  filterText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  filterTextActive: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  list: {
-    padding: 24,
-    gap: 14,
-  },
-  emptyList: {
-    flexGrow: 1,
-  },
-  caseCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-  },
-  caseIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  caseInfo: {
-    flex: 1,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  caseName: {
-    fontSize: 16,
-    fontWeight: '800',
-    flexShrink: 1,
-  },
-  caseDescription: {
-    fontSize: 13,
-    lineHeight: 19,
     marginBottom: 7,
   },
-  caseMeta: {
-    fontSize: 11,
-    fontWeight: '600',
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconButton: {
+    width: 46,
+    height: 46,
+    borderWidth: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newCaseButton: {
+    minWidth: 132,
+  },
+  listContent: {
+    paddingBottom: 48,
+  },
+  columnWrapper: {
+    gap: 16,
+  },
+  caseCard: {
+    padding: 20,
+    marginBottom: 16,
+    flex: 1,
+  },
+  caseTouchTarget: {
+    flex: 1,
+  },
+  cardInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  detailsContainer: {
+    flex: 1,
+  },
+  caseTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  caseDescription: {
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   statusBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 14,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginRight: 12,
   },
-  statusBadgeText: {
+  statusText: {
     fontSize: 10,
     fontWeight: '800',
-    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  arrowBox: {
-    marginLeft: 12,
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  centerState: {
+  cardDate: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  chevron: {
+    marginLeft: 16,
+    opacity: 0.5,
+  },
+  centerContainer: {
     flex: 1,
-    minHeight: 300,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 28,
+    padding: 24,
+    minHeight: 300,
   },
-  stateText: {
-    fontSize: 14,
-    marginTop: 10,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    marginTop: 14,
-  },
-  errorText: {
-    fontSize: 14,
-    marginTop: 10,
-    textAlign: 'center',
-    lineHeight: 20,
-    fontWeight: '600',
-  },
-  retryButton: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+  loadingText: {
     marginTop: 16,
+    fontSize: 16,
   },
-  retryText: {
-    fontSize: 13,
-    fontWeight: '800',
+  emptyText: {
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
   },
 });

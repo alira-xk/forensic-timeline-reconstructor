@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { lightTheme, darkTheme, Theme } from './index';
 
 type ThemeContextType = {
@@ -18,11 +19,20 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const systemScheme = useColorScheme();
     const [isDark, setIsDark] = useState(systemScheme === 'dark');
 
-    // Default to Light Mode as per requirements, but respect user toggle
-    // Could persist this in AsyncStorage in a real app
+    useEffect(() => {
+        AsyncStorage.getItem('forensic-theme').then((storedTheme) => {
+            if (storedTheme === 'dark' || storedTheme === 'light') {
+                setIsDark(storedTheme === 'dark');
+            }
+        }).catch(() => undefined);
+    }, []);
 
     const toggleTheme = () => {
-        setIsDark(prev => !prev);
+        setIsDark((current) => {
+            const next = !current;
+            AsyncStorage.setItem('forensic-theme', next ? 'dark' : 'light').catch(() => undefined);
+            return next;
+        });
     };
 
     const theme = isDark ? darkTheme : lightTheme;

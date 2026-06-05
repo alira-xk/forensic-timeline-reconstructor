@@ -36,6 +36,7 @@ import { ScreenWrapper } from '../components/ScreenWrapper';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { SettingsPopup } from '../components/SettingsPopup';
+import { Skeleton, ListSkeleton } from '../components/Skeleton';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
 import { RootStackParamList, MainTabParamList } from '../types/navigation';
@@ -145,7 +146,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       key: 'TOTAL_CASES',
       label: 'Cases',
       value: totalCases,
-      icon: <Database size={19} color={theme.colors.primary} />,
+      icon: <Database size={24} color={theme.colors.primary} />,
       accentColor: theme.colors.primary,
       note: 'Stored investigations',
     },
@@ -153,7 +154,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       key: 'ACTIVE_CASES',
       label: 'Active',
       value: activeCases,
-      icon: <FolderOpen size={19} color={theme.colors.status.success} />,
+      icon: <FolderOpen size={24} color={theme.colors.status.success} />,
       accentColor: theme.colors.status.success,
       note: 'Open investigations',
     },
@@ -161,7 +162,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       key: 'EVIDENCE_FILES',
       label: 'Evidence',
       value: totalEvidenceFiles,
-      icon: <FileText size={19} color={theme.colors.primary} />,
+      icon: <FileText size={24} color={theme.colors.primary} />,
       accentColor: theme.colors.primary,
       note: 'Files in custody',
     },
@@ -169,7 +170,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       key: 'PROCESSED_FILES',
       label: 'Processed',
       value: processedFiles,
-      icon: <CheckCircle size={19} color={theme.colors.status.success} />,
+      icon: <CheckCircle size={24} color={theme.colors.status.success} />,
       accentColor: theme.colors.status.success,
       note: `${completionRate}% extraction rate`,
     },
@@ -177,7 +178,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       key: 'PENDING_FILES',
       label: 'Pending',
       value: pendingFiles,
-      icon: <Clock size={19} color={theme.colors.status.warning} />,
+      icon: <Clock size={24} color={theme.colors.status.warning} />,
       accentColor: theme.colors.status.warning,
       note: 'Awaiting extraction',
     },
@@ -185,7 +186,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       key: 'FAILED_FILES',
       label: 'Failed',
       value: failedFiles,
-      icon: <AlertTriangle size={19} color={theme.colors.status.error} />,
+      icon: <AlertTriangle size={24} color={theme.colors.status.error} />,
       accentColor: theme.colors.status.error,
       note: 'Need review',
     },
@@ -193,7 +194,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       key: 'TIMELINE_EVENTS',
       label: 'Events',
       value: totalTimelineEvents,
-      icon: <BarChart3 size={19} color={theme.colors.accent} />,
+      icon: <BarChart3 size={24} color={theme.colors.accent} />,
       accentColor: theme.colors.accent,
       note: 'Extracted signals',
     },
@@ -221,9 +222,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       .map((event) => ({
         id: event._id,
         title: event.eventType,
-        description: `${event.fileRecord?.originalName || 'Unknown file'} - ${
-          event.description || event.eventSource || 'Timeline event recorded'
-        }`,
+        description: `${event.fileRecord?.originalName || 'Unknown file'} - ${event.description || event.eventSource || 'Timeline event recorded'}`,
         time: formatTime(event.createdAt || event.timestamp),
         type: event.eventType,
       }));
@@ -240,7 +239,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         id: item._id,
         title: item.title,
         subtitle: item.description || 'No description provided.',
-        meta: `${item.status} - Created ${formatDate(item.createdAt)}`,
+        meta: `${item.status.replace('_', ' ')} - Created ${formatDate(item.createdAt)}`,
         caseId: item._id,
       }));
     }
@@ -252,7 +251,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
           id: item._id,
           title: item.title,
           subtitle: item.description || 'No description provided.',
-          meta: `${item.status} - Created ${formatDate(item.createdAt)}`,
+          meta: `${item.status.replace('_', ' ')} - Created ${formatDate(item.createdAt)}`,
           caseId: item._id,
         }));
     }
@@ -365,21 +364,22 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
     return (
       <TouchableOpacity
         key={item.key}
-        activeOpacity={0.86}
+        activeOpacity={0.8}
         onPress={() => setSelectedMetric(item.key)}
         style={[
           styles.metricCard,
           {
             borderColor: selected ? item.accentColor : theme.colors.border,
-            backgroundColor: theme.colors.panel,
+            backgroundColor: selected ? `${item.accentColor}11` : theme.colors.panel,
+            borderWidth: selected ? 2 : 1,
+            transform: [{ scale: selected ? 1.02 : 1 }],
           },
         ]}
       >
         <View style={styles.metricTopRow}>
-          <View style={[styles.metricIcon, { backgroundColor: `${item.accentColor}18` }]}>
+          <View style={[styles.metricIcon, { backgroundColor: `${item.accentColor}22` }]}>
             {item.icon}
           </View>
-          <View style={[styles.metricPulse, { backgroundColor: item.accentColor }]} />
         </View>
 
         <Text style={[styles.metricValue, { color: theme.colors.text.primary }]}>{item.value}</Text>
@@ -398,211 +398,198 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <LinearGradient
-          colors={theme.dark ? ['#111C2C', '#0C121A'] : ['#FFFFFF', '#ECF4FF']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.hero, { borderColor: theme.colors.border }]}
-        >
-          <View style={styles.heroCopy}>
-            <View style={[styles.kickerPill, { borderColor: theme.colors.border }]}>
-              <ShieldCheck size={14} color={theme.colors.accent} />
-              <Text style={[styles.kickerText, { color: theme.colors.text.secondary }]}>
-                Evidence Reconstruction Workspace
+        {/* Modern Header Section */}
+        <View style={styles.headerModern}>
+            <View>
+              <Text style={[styles.greeting, { color: theme.colors.text.muted }]}>
+                Welcome back,
+              </Text>
+              <Text style={[styles.userName, { color: theme.colors.text.primary }]}>
+                {displayName}
               </Text>
             </View>
+            <TouchableOpacity
+              onPress={() => setShowSettings(true)}
+              style={[styles.settingsButton, { backgroundColor: theme.colors.surfaceRaised }]}
+            >
+              <Settings size={22} color={theme.colors.text.secondary} />
+            </TouchableOpacity>
+        </View>
 
-            <Text style={[styles.heroTitle, { color: theme.colors.text.primary }]}>
-              Welcome Back to Your Dashboard, {displayName}
-            </Text>
-
-
-            <View style={styles.heroActions}>
-              <Button
-                title="Create Case"
-                onPress={() => navigation.navigate('CreateCase')}
-                icon={<Plus size={18} color="#FFFFFF" />}
-                style={styles.heroButton}
-              />
-
-              <Button
-                title="Latest Timeline"
-                variant="secondary"
-                onPress={handleViewLatestTimeline}
-                icon={<Activity size={18} color={theme.colors.text.primary} />}
-                style={styles.heroButton}
-              />
+        {loading && cases.length === 0 ? (
+          <View style={styles.dashboardSkeleton}>
+            <View style={styles.skeletonActions}>
+              <Skeleton height={74} style={styles.skeletonAction} />
+              <Skeleton height={74} style={styles.skeletonAction} />
+              <Skeleton height={74} style={styles.skeletonAction} />
             </View>
-          </View>
-
-          <View style={styles.orbitPanel}>
-            <View style={[styles.orbitRing, { borderColor: theme.colors.backdrop.grid }]}>
-              <View style={[styles.orbitCore, { backgroundColor: theme.colors.primary }]}>
-                <Zap size={30} color="#FFFFFF" />
-              </View>
-              <View style={[styles.orbitNode, styles.orbitNodeA, { backgroundColor: theme.colors.accent }]} />
-              <View style={[styles.orbitNode, styles.orbitNodeB, { backgroundColor: theme.colors.amber }]} />
-              <View style={[styles.orbitNode, styles.orbitNodeC, { backgroundColor: theme.colors.status.error }]} />
+            <View style={styles.skeletonMetrics}>
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton key={index} width={150} height={148} />
+              ))}
             </View>
-
-            <View style={[styles.heroStatPlate, { backgroundColor: theme.colors.panel, borderColor: theme.colors.border }]}>
-              <Text style={[styles.heroStatLabel, { color: theme.colors.text.secondary }]}>Processed evidence</Text>
-              <Text style={[styles.heroStatValue, { color: theme.colors.text.primary }]}>{completionRate}%</Text>
-            </View>
-          </View>
-        </LinearGradient>
-
-        {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={theme.colors.primary} />
-            <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>Loading dashboard data...</Text>
+            <ListSkeleton rows={4} />
           </View>
         ) : (
           <>
-            <View style={styles.metricsScroller}>
-              <ScrollView
-                horizontal={!isWeb}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={[styles.metricsGrid, isWeb && styles.metricsGridWeb]}
-              >
-                {metricItems.map(renderMetricCard)}
-              </ScrollView>
+            {/* Quick Actions Card - Glassmorphic design */}
+            <Card glass={true} style={styles.quickActionsCard}>
+                <View style={styles.quickActionsGrid}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: `${theme.colors.primary}15` }]}
+                    onPress={() => navigation.navigate('CreateCase')}
+                  >
+                    <View style={[styles.actionIconBadge, { backgroundColor: theme.colors.primary }]}>
+                      <Plus size={20} color="#fff" />
+                    </View>
+                    <Text style={[styles.actionLabel, { color: theme.colors.text.primary }]}>New Case</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: `${theme.colors.accent}15` }]}
+                    onPress={() => navigation.navigate('CasesList')}
+                  >
+                    <View style={[styles.actionIconBadge, { backgroundColor: theme.colors.accent }]}>
+                      <FolderOpen size={20} color="#fff" />
+                    </View>
+                    <Text style={[styles.actionLabel, { color: theme.colors.text.primary }]}>All Cases</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: `${theme.colors.violet}15` }]}
+                    onPress={handleViewLatestTimeline}
+                  >
+                    <View style={[styles.actionIconBadge, { backgroundColor: theme.colors.violet }]}>
+                      <BarChart3 size={20} color="#fff" />
+                    </View>
+                    <Text style={[styles.actionLabel, { color: theme.colors.text.primary }]}>Latest Timeline</Text>
+                  </TouchableOpacity>
+                </View>
+            </Card>
+
+            {/* Metrics Scroll - Modern Horizontal List */}
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+                Dashboard Overview
+              </Text>
+              <TouchableOpacity onPress={loadDashboardData} style={styles.refreshBtn}>
+                <RefreshCcw size={16} color={theme.colors.primary} />
+                <Text style={{ color: theme.colors.primary, fontWeight: '600', marginLeft: 6 }}>Sync</Text>
+              </TouchableOpacity>
             </View>
 
-            <View style={[styles.mainGrid, isWeb && styles.mainGridWeb]}>
-              <Card style={styles.detailPanel}>
-                <View style={styles.panelHeader}>
-                  <View>
-                    <Text style={[styles.sectionEyebrow, { color: theme.colors.primary }]}>Live index</Text>
-                    <Text style={[styles.panelTitle, { color: theme.colors.text.primary }]}>
+            <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.metricsScrollContent}
+            >
+              {metricItems.map(renderMetricCard)}
+            </ScrollView>
+
+            {/* Layout Split for Desktop vs Mobile */}
+            <View style={[styles.splitLayout, isWeb && { flexDirection: 'row' }]}>
+              {/* Left Column - Details */}
+              <View style={[styles.column, isWeb && { flex: 2, paddingRight: 24 }]}>
+                <Card glass style={styles.detailsCard}>
+                  <View style={styles.cardHeader}>
+                    <Text style={[styles.cardTitle, { color: theme.colors.text.primary }]}>
                       {selectedMetricTitle}
                     </Text>
                   </View>
-
-                  <Text style={[styles.panelCount, { color: theme.colors.text.secondary }]}>
-                    {selectedDetails.length} records
-                  </Text>
-                </View>
-
-                {selectedDetails.length === 0 ? (
-                  <View style={styles.emptyDetail}>
-                    <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>No records found</Text>
-                    <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>This category has no data yet.</Text>
-                  </View>
-                ) : (
-                  selectedDetails.slice(0, 8).map((item, index) => (
-                    <TouchableOpacity
-                      key={item.id}
-                      activeOpacity={canOpenCaseFromSelectedList ? 0.78 : 1}
-                      disabled={!canOpenCaseFromSelectedList}
-                      onPress={() => handleDetailItemPress(item)}
-                      style={[styles.detailRow, index !== 0 && { borderTopColor: theme.colors.border, borderTopWidth: 1 }]}
-                    >
-                      <View style={[styles.detailDot, { backgroundColor: theme.colors.primary }]} />
-                      <View style={styles.detailContent}>
-                        <Text numberOfLines={1} style={[styles.detailTitle, { color: theme.colors.text.primary }]}>
-                          {item.title}
-                        </Text>
-                        <Text numberOfLines={2} style={[styles.detailSubtitle, { color: theme.colors.text.secondary }]}>
-                          {item.subtitle}
-                        </Text>
-                        <Text numberOfLines={1} style={[styles.detailMeta, { color: theme.colors.text.muted }]}>
-                          {item.meta}
+                  <View style={styles.detailsList}>
+                    {selectedDetails.length === 0 ? (
+                      <View style={styles.emptyState}>
+                        <Activity size={40} color={theme.colors.text.muted} style={{ marginBottom: 12, opacity: 0.5 }} />
+                        <Text style={[styles.emptyStateText, { color: theme.colors.text.secondary }]}>
+                          No items found for {selectedMetricTitle.toLowerCase()}.
                         </Text>
                       </View>
-                      {canOpenCaseFromSelectedList ? <ArrowRight size={17} color={theme.colors.text.muted} /> : null}
-                    </TouchableOpacity>
-                  ))
-                )}
-              </Card>
-
-              <View style={styles.sideStack}>
-                <Card style={styles.actionPanel}>
-                  <Text style={[styles.sectionEyebrow, { color: theme.colors.accent }]}>Fast path</Text>
-                  <Text style={[styles.panelTitle, { color: theme.colors.text.primary }]}>Investigation actions</Text>
-
-                  <View style={styles.actionGrid}>
-                    <Button
-                      title="Cases"
-                      onPress={() => navigation.navigate('CasesList')}
-                      variant="secondary"
-                      icon={<FolderOpen size={18} color={theme.colors.text.primary} />}
-                    />
-                    <Button
-                      title="Timeline"
-                      onPress={handleViewLatestTimeline}
-                      variant="secondary"
-                      icon={<Activity size={18} color={theme.colors.text.primary} />}
-                    />
-                  </View>
-
-                  <View style={[styles.summaryStrip, { borderColor: theme.colors.border }]}>
-                    <Upload size={16} color={theme.colors.primary} />
-                    <Text style={[styles.summaryStripText, { color: theme.colors.text.secondary }]}>
-                      PDF, DOC, DOCX, images, TXT, and LOG files can be added to a case.
-                    </Text>
+                    ) : (
+                      selectedDetails.map((item, index) => (
+                        <TouchableOpacity
+                          key={item.id}
+                          activeOpacity={canOpenCaseFromSelectedList ? 0.7 : 1}
+                          onPress={() => handleDetailItemPress(item)}
+                          disabled={!canOpenCaseFromSelectedList}
+                          style={[
+                            styles.detailItemRow,
+                            { borderBottomColor: index === selectedDetails.length - 1 ? 'transparent' : theme.colors.border },
+                          ]}
+                        >
+                          <View style={styles.detailItemContent}>
+                            <Text style={[styles.detailItemTitle, { color: theme.colors.text.primary }]} numberOfLines={1}>
+                              {item.title}
+                            </Text>
+                            <Text style={[styles.detailItemSubtitle, { color: theme.colors.text.secondary }]} numberOfLines={1}>
+                              {item.subtitle}
+                            </Text>
+                            <Text style={[styles.detailItemMeta, { color: theme.colors.text.muted }]}>
+                              {item.meta}
+                            </Text>
+                          </View>
+                          {canOpenCaseFromSelectedList && (
+                            <View style={styles.detailItemArrow}>
+                              <ArrowRight size={18} color={theme.colors.text.muted} />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      ))
+                    )}
                   </View>
                 </Card>
+              </View>
 
-                <Card style={styles.activityPanel}>
-                  <View style={styles.panelHeader}>
-                    <View>
-                      <Text style={[styles.sectionEyebrow, { color: theme.colors.amber }]}>Recent signals</Text>
-                      <Text style={[styles.panelTitle, { color: theme.colors.text.primary }]}>Timeline activity</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.iconButton, { borderColor: theme.colors.border }]}
-                      onPress={loadDashboardData}
-                      activeOpacity={0.8}
-                    >
-                      <RefreshCcw size={15} color={theme.colors.text.secondary} />
-                    </TouchableOpacity>
+              {/* Right Column - Recent Activity */}
+              <View style={[styles.column, isWeb && { flex: 1 }]}>
+                <Card glass style={styles.activityCard}>
+                  <View style={styles.cardHeader}>
+                    <Text style={[styles.cardTitle, { color: theme.colors.text.primary }]}>
+                      Recent Activity
+                    </Text>
                   </View>
 
-                  {recentActivity.length === 0 ? (
-                    <View style={styles.emptyActivity}>
-                      <Text style={[styles.emptyTitle, { color: theme.colors.text.primary }]}>No activity yet</Text>
-                      <Text style={[styles.emptyText, { color: theme.colors.text.secondary }]}>
-                        Upload evidence and run metadata extraction to generate timeline activity.
-                      </Text>
-                    </View>
-                  ) : (
-                    recentActivity.map((item, index) => (
-                      <View
-                        key={item.id}
-                        style={[
-                          styles.activityItem,
-                          index !== 0 && { borderTopColor: theme.colors.border, borderTopWidth: 1 },
-                        ]}
-                      >
-                        <View style={[styles.activityDot, { backgroundColor: getActivityColor(item.type) }]} />
-                        <View style={styles.activityContent}>
-                          <Text numberOfLines={1} style={[styles.activityTitle, { color: theme.colors.text.primary }]}>
-                            {item.title}
-                          </Text>
-                          <Text numberOfLines={2} style={[styles.activityDesc, { color: theme.colors.text.secondary }]}>
-                            {item.description}
-                          </Text>
-                        </View>
-                        <Text style={[styles.activityTime, { color: theme.colors.text.muted }]}>{item.time}</Text>
+                  <View style={styles.activityList}>
+                    {recentActivity.length === 0 ? (
+                      <View style={styles.emptyStateActivity}>
+                        <Text style={[styles.emptyStateText, { color: theme.colors.text.secondary }]}>
+                          No recent events detected.
+                        </Text>
                       </View>
-                    ))
-                  )}
+                    ) : (
+                      recentActivity.map((activity, index) => (
+                        <View key={activity.id} style={styles.activityItem}>
+                          <View style={styles.activityTimeline}>
+                            <View
+                              style={[
+                                styles.activityDot,
+                                { backgroundColor: getActivityColor(activity.type) },
+                              ]}
+                            />
+                            {index < recentActivity.length - 1 && (
+                              <View style={[styles.activityLine, { backgroundColor: theme.colors.border }]} />
+                            )}
+                          </View>
+
+                          <View style={styles.activityContent}>
+                            <Text style={[styles.activityTitle, { color: theme.colors.text.primary }]}>
+                              {activity.title}
+                            </Text>
+                            <Text style={[styles.activityDescription, { color: theme.colors.text.secondary }]} numberOfLines={2}>
+                              {activity.description}
+                            </Text>
+                            <Text style={[styles.activityTime, { color: theme.colors.text.muted }]}>
+                              {activity.time}
+                            </Text>
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </View>
                 </Card>
               </View>
             </View>
           </>
         )}
-
-        {!isWeb ? (
-          <TouchableOpacity
-            onPress={() => setShowSettings(true)}
-            style={[styles.mobileSettings, { backgroundColor: theme.colors.panelStrong, borderColor: theme.colors.border }]}
-            activeOpacity={0.85}
-          >
-            <Settings size={20} color={theme.colors.text.primary} />
-          </TouchableOpacity>
-        ) : null}
       </ScrollView>
     </ScreenWrapper>
   );
@@ -610,340 +597,247 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   content: {
-    width: '100%',
-    maxWidth: 1280,
-    alignSelf: 'center',
     padding: 24,
-    paddingBottom: 52,
+    paddingBottom: 48,
   },
-  hero: {
-    borderWidth: 1,
-    borderRadius: 24,
-    minHeight: 330,
-    padding: 28,
-    marginBottom: 22,
-    overflow: 'hidden',
+  headerModern: {
     flexDirection: 'row',
-    gap: 24,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 24px 80px rgba(15, 23, 42, 0.16)',
-      } as any,
-    }),
-  },
-  heroCopy: {
-    flex: 1,
-    minWidth: 260,
-  },
-  kickerPill: {
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 18,
+    marginBottom: 30,
   },
-  kickerText: {
-    fontSize: 12,
-    fontWeight: '800',
+  greeting: {
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
-  heroTitle: {
-    fontSize: 42,
-    lineHeight: 46,
-    fontWeight: '900',
-    maxWidth: 640,
-  },
-  heroSubtitle: {
-    fontSize: 15,
-    lineHeight: 23,
-    marginTop: 14,
-    maxWidth: 690,
-  },
-  heroActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 22,
-  },
-  heroButton: {
-    minWidth: 150,
-  },
-  identityText: {
-    marginTop: 16,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  orbitPanel: {
-    width: 260,
-    minHeight: 240,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orbitRing: {
-    width: 210,
-    height: 210,
-    borderRadius: 105,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orbitCore: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orbitNode: {
-    position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: 14,
-  },
-  orbitNodeA: {
-    top: 14,
-    right: 44,
-  },
-  orbitNodeB: {
-    bottom: 26,
-    left: 34,
-  },
-  orbitNodeC: {
-    right: 18,
-    bottom: 70,
-  },
-  heroStatPlate: {
-    position: 'absolute',
-    right: 0,
-    bottom: 8,
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 14,
-    width: 168,
-  },
-  heroStatLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  heroStatValue: {
+  userName: {
     fontSize: 28,
-    fontWeight: '900',
+    fontWeight: '800',
+    letterSpacing: -0.5,
     marginTop: 4,
   },
-  loadingBox: {
-    minHeight: 280,
+  settingsButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    padding: 60,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 14,
+  dashboardSkeleton: {
+    gap: 20,
   },
-  metricsScroller: {
-    marginBottom: 20,
-  },
-  metricsGrid: {
-    gap: 12,
-    paddingRight: 24,
-  },
-  metricsGridWeb: {
+  skeletonActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingRight: 0,
+    gap: 12,
+  },
+  skeletonAction: {
+    flex: 1,
+    minWidth: 180,
+  },
+  skeletonMetrics: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  quickActionsCard: {
+    padding: 6,
+    marginBottom: 32,
+    borderRadius: 24,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    minWidth: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    gap: 12,
+  },
+  actionIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  actionLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  refreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+  },
+  metricsScrollContent: {
+    paddingBottom: 16,
+    gap: 16,
   },
   metricCard: {
-    width: 172,
-    minHeight: 154,
-    borderWidth: 1,
-    borderRadius: 18,
+    width: 140,
     padding: 16,
+    borderRadius: 20,
+    marginRight: 16,
   },
   metricTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
   metricIcon: {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 44,
     borderRadius: 12,
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  metricPulse: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    alignItems: 'center',
   },
   metricValue: {
-    fontSize: 30,
-    fontWeight: '900',
-    marginTop: 14,
+    fontSize: 28,
+    fontWeight: '800',
+    marginBottom: 4,
   },
   metricLabel: {
-    fontSize: 13,
-    fontWeight: '900',
-    marginTop: 2,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   metricNote: {
     fontSize: 11,
-    fontWeight: '800',
-    marginTop: 10,
+    fontWeight: '600',
   },
-  mainGrid: {
-    gap: 18,
+  splitLayout: {
+    marginTop: 16,
+    gap: 24,
   },
-  mainGridWeb: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  column: {
+    flexDirection: 'column',
   },
-  detailPanel: {
-    flex: 1.25,
-    padding: 0,
-    overflow: 'hidden',
+  detailsCard: {
+    flex: 1,
+    minHeight: 400,
   },
-  sideStack: {
-    flex: 0.8,
-    gap: 18,
+  activityCard: {
+    flex: 1,
+    minHeight: 400,
   },
-  panelHeader: {
-    padding: 18,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 14,
-    alignItems: 'center',
+  cardHeader: {
+    marginBottom: 20,
   },
-  sectionEyebrow: {
-    fontSize: 11,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 5,
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
   },
-  panelTitle: {
-    fontSize: 19,
-    fontWeight: '900',
-  },
-  panelCount: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  detailRow: {
-    minHeight: 86,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  detailDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  detailContent: {
+  detailsList: {
     flex: 1,
   },
-  detailTitle: {
+  detailItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  detailItemContent: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  detailItemTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  detailItemSubtitle: {
     fontSize: 14,
-    fontWeight: '900',
+    marginBottom: 4,
   },
-  detailSubtitle: {
+  detailItemMeta: {
     fontSize: 12,
-    lineHeight: 18,
-    marginTop: 3,
   },
-  detailMeta: {
-    fontSize: 11,
-    marginTop: 5,
+  detailItemArrow: {
+    opacity: 0.5,
   },
-  emptyDetail: {
-    padding: 22,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  emptyText: {
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 6,
-  },
-  actionPanel: {
-    padding: 18,
-  },
-  actionGrid: {
-    gap: 10,
-    marginTop: 16,
-  },
-  summaryStrip: {
-    marginTop: 16,
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  summaryStripText: {
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  activityPanel: {
-    padding: 0,
-    overflow: 'hidden',
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderWidth: 1,
-    borderRadius: 12,
+  emptyState: {
+    padding: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyActivity: {
-    padding: 18,
+  emptyStateActivity: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyStateText: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  activityList: {
+    flex: 1,
   },
   activityItem: {
     flexDirection: 'row',
+    marginBottom: 10,
+  },
+  activityTimeline: {
     alignItems: 'center',
-    padding: 16,
-    gap: 13,
+    width: 24,
+    marginRight: 12,
   },
   activityDot: {
-    width: 9,
-    height: 34,
-    borderRadius: 9,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 4,
+    zIndex: 1,
+  },
+  activityLine: {
+    width: 2,
+    flex: 1,
+    marginTop: 4,
   },
   activityContent: {
     flex: 1,
+    paddingBottom: 24,
   },
   activityTitle: {
-    fontWeight: '900',
     fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
   },
-  activityDesc: {
-    fontSize: 12,
-    marginTop: 3,
-    lineHeight: 17,
+  activityDescription: {
+    fontSize: 13,
+    marginBottom: 6,
+    lineHeight: 18,
   },
   activityTime: {
     fontSize: 11,
-    fontVariant: ['tabular-nums'],
-  },
-  mobileSettings: {
-    position: 'absolute',
-    top: 18,
-    right: 18,
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontWeight: '600',
   },
 });

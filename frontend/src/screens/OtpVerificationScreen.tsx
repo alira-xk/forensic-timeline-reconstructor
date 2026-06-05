@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -24,6 +25,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'OtpVerification'>;
 export const OtpVerificationScreen: React.FC<Props> = ({ navigation, route }) => {
   const { theme } = useTheme();
   const { verifyOtp, resendOtp } = useAuth();
+  const { width } = useWindowDimensions();
 
   const { email } = route.params;
 
@@ -116,6 +118,7 @@ export const OtpVerificationScreen: React.FC<Props> = ({ navigation, route }) =>
             style={[
               styles.formCard,
               {
+                width: Math.min(430, Math.max(280, width - 48)),
                 backgroundColor: theme.colors.surface,
                 borderColor: theme.colors.border,
                 shadowColor: theme.shadows.card.shadowColor,
@@ -265,8 +268,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   formCard: {
-    width: '100%',
+    alignSelf: 'center',
     maxWidth: 430,
+    minWidth: 0,
+    flexShrink: 1,
     borderWidth: 1,
     borderRadius: 24,
     padding: 26,
@@ -277,6 +282,7 @@ const styles = StyleSheet.create({
       height: 10,
     },
     elevation: 6,
+    ...Platform.select({ web: { boxSizing: 'border-box' } as any }),
   },
   backButton: {
     flexDirection: 'row',
@@ -297,6 +303,7 @@ const styles = StyleSheet.create({
   },
   cardHeaderText: {
     flex: 1,
+    minWidth: 0,
   },
   cardIcon: {
     width: 46,

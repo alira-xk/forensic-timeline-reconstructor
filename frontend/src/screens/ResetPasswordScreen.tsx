@@ -135,6 +135,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
+    maxWidth: 520,
+    alignSelf: 'center',
   },
   backButton: {
     flexDirection: 'row',
@@ -147,6 +149,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   card: {
+    alignSelf: 'stretch',
+    minWidth: 0,
+    ...Platform.select({ web: { boxSizing: 'border-box' } as any }),
     borderWidth: 1,
     borderRadius: 20,
     padding: 24,

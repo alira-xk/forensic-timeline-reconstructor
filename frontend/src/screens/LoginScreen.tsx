@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -24,6 +25,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 export const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const { theme, toggleTheme, isDark } = useTheme();
   const { login } = useAuth();
+  const { width } = useWindowDimensions();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -142,6 +144,7 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
             style={[
               styles.formCard,
               {
+                width: Math.min(420, Math.max(280, width - 48)),
                 backgroundColor: theme.colors.surface,
                 borderColor: theme.colors.border,
                 shadowColor: theme.shadows.card.shadowColor,
@@ -153,7 +156,7 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
                 <ShieldCheck size={22} color={theme.colors.primary} />
               </View>
 
-              <View>
+              <View style={styles.cardHeaderText}>
                 <Text style={[styles.loginHeader, { color: theme.colors.text.primary }]}>
                   Sign in
                 </Text>
@@ -303,8 +306,10 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   formCard: {
-    width: '100%',
+    alignSelf: 'center',
     maxWidth: 420,
+    minWidth: 0,
+    flexShrink: 1,
     borderWidth: 1,
     borderRadius: 20,
     padding: 26,
@@ -315,6 +320,7 @@ const styles = StyleSheet.create({
       height: 10,
     },
     elevation: 6,
+    ...Platform.select({ web: { boxSizing: 'border-box' } as any }),
   },
   forgotLink: {
     alignSelf: 'flex-end',
@@ -331,6 +337,10 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 22,
   },
+  cardHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
   cardIcon: {
     width: 40,
     height: 40,
@@ -346,6 +356,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 4,
     lineHeight: 18,
+    flexShrink: 1,
   },
   messageBanner: {
     borderWidth: 1,
