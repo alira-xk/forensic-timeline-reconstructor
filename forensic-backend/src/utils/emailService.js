@@ -1,13 +1,14 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns').promises;
 
 const getEmailConfig = () => ({
-  host: process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || '465', 10),
-  secure: (process.env.SMTP_SECURE || process.env.EMAIL_SECURE || 'true') === 'true',
-  user: process.env.SMTP_USER || process.env.EMAIL_USER || '',
-  pass: process.env.SMTP_PASS || process.env.EMAIL_PASS || '',
-  from: process.env.SMTP_FROM || process.env.EMAIL_FROM || '',
-  fromName: process.env.EMAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'Forensic Timeline',
+  host: String(process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com').trim(),
+  port: parseInt(String(process.env.SMTP_PORT || process.env.EMAIL_PORT || '465').trim(), 10),
+  secure: String(process.env.SMTP_SECURE || process.env.EMAIL_SECURE || 'true').trim() === 'true',
+  user: String(process.env.SMTP_USER || process.env.EMAIL_USER || '').trim(),
+  pass: String(process.env.SMTP_PASS || process.env.EMAIL_PASS || '').trim(),
+  from: String(process.env.SMTP_FROM || process.env.EMAIL_FROM || '').trim(),
+  fromName: String(process.env.EMAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'Forensic Timeline').trim(),
 });
 
 const getSmtpTimeoutMs = () => {
@@ -15,7 +16,24 @@ const getSmtpTimeoutMs = () => {
   return Number.isFinite(timeout) && timeout > 0 ? timeout : 12000;
 };
 
-const buildTransporter = () => {
+const resolveSmtpHost = async (host) => {
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+    return host;
+  }
+
+  if ((process.env.SMTP_FORCE_IPV4 || 'true') !== 'true') {
+    return host;
+  }
+
+  const addresses = await dns.resolve4(host);
+  if (!addresses.length) {
+    throw new Error(`No IPv4 SMTP address found for ${host}.`);
+  }
+
+  return addresses[0];
+};
+
+const buildTransporter = async () => {
   const config = getEmailConfig();
   const timeout = getSmtpTimeoutMs();
 
@@ -27,14 +45,20 @@ const buildTransporter = () => {
     throw error;
   }
 
+  const resolvedHost = await resolveSmtpHost(config.host);
+
   return nodemailer.createTransport({
-    host: config.host,
+    host: resolvedHost,
     port: config.port,
     secure: config.secure,
-    family: 4, // force IPv4 to avoid Render IPv6 ENETUNREACH issues
+    name: config.host,
+    family: 4,
     auth: {
       user: config.user,
       pass: config.pass,
+    },
+    tls: {
+      servername: config.host,
     },
     connectionTimeout: timeout,
     greetingTimeout: timeout,
@@ -64,7 +88,7 @@ const sendPasswordResetEmail = async (to, token) => {
     return;
   }
 
-  const transporter = buildTransporter();
+  const transporter = await buildTransporter();
 
   const html = `
     <div style="font-family: Arial, sans-serif; padding: 20px;">
@@ -90,7 +114,7 @@ const sendOtpEmail = async (to, otpCode) => {
     return;
   }
 
-  const transporter = buildTransporter();
+  const transporter = await buildTransporter();
 
   const html = `
     <div style="font-family: Arial, sans-serif; padding: 20px;">
