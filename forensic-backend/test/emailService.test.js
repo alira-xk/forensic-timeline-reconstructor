@@ -21,6 +21,8 @@ const resetEmailEnv = () => {
   delete process.env.SMTP_FORCE_IPV4;
   delete process.env.EMAIL_PROVIDER;
   delete process.env.RESEND_API_KEY;
+  delete process.env.EMAIL_FROM;
+  delete process.env.EMAIL_FROM_NAME;
 };
 
 describe('emailService', () => {
@@ -96,5 +98,22 @@ describe('emailService', () => {
       })
     );
     expect(body.html).toContain('123456');
+  });
+
+  test('accepts a formatted EMAIL_FROM value for Resend', async () => {
+    process.env.EMAIL_PROVIDER = 'resend';
+    process.env.RESEND_API_KEY = 're_test_key';
+    process.env.EMAIL_FROM = '"Forensic Timeline Reconstructor <onboarding@resend.dev>"';
+    process.env.EMAIL_FROM_NAME = '"Forensic Timeline Reconstructor"';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn(),
+    });
+
+    const { sendOtpEmail } = require('../src/utils/emailService');
+    await sendOtpEmail('recipient@example.com', '123456');
+
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.from).toBe('Forensic Timeline Reconstructor <onboarding@resend.dev>');
   });
 });

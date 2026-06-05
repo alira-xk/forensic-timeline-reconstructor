@@ -174,17 +174,31 @@ const sendEmail = async (mailOptions) => {
   await sendWithSmtpFailover(mailOptions);
 };
 
-const getFromAddress = () => {
-  const config = getEmailConfig();
-  if (config.from && config.from.includes('@')) {
-    return config.from;
+const stripWrappingQuotes = (value) => {
+  const trimmed = String(value || '').trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
   }
-  return config.user || 'no-reply@forensic.local';
+  return trimmed;
 };
 
-const getFromName = () => {
+const isFormattedMailbox = (value) => /^[^<>]+<[^<>@\s]+@[^<>\s]+>$/.test(value);
+
+const getFromHeader = () => {
   const config = getEmailConfig();
-  return config.fromName || config.from || 'Forensic Timeline';
+  const from = stripWrappingQuotes(config.from);
+  const fromName = stripWrappingQuotes(config.fromName);
+
+  if (isFormattedMailbox(from)) {
+    return from;
+  }
+
+  const address = from && from.includes('@') ? from : config.user || 'no-reply@forensic.local';
+  const name = fromName || 'Forensic Timeline';
+  return `${name} <${address}>`;
 };
 
 const sendPasswordResetEmail = async (to, token) => {
@@ -204,7 +218,7 @@ const sendPasswordResetEmail = async (to, token) => {
   `;
 
   await sendEmail({
-    from: `${getFromName()} <${getFromAddress()}>`,
+    from: getFromHeader(),
     to,
     subject: 'Reset your password',
     html,
@@ -228,7 +242,7 @@ const sendOtpEmail = async (to, otpCode) => {
   `;
 
   await sendEmail({
-    from: `${getFromName()} <${getFromAddress()}>`,
+    from: getFromHeader(),
     to,
     subject: 'Your verification code',
     html,
