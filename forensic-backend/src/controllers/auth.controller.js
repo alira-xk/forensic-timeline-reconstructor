@@ -260,15 +260,20 @@ exports.register = async (req, res, next) => {
       if (!existing) {
         await User.findByIdAndDelete(user._id);
       }
-      return errorResponse(
-        res,
+
+      const isProd = (process.env.NODE_ENV || '').toLowerCase() === 'production';
+      const baseMessage =
         emailErr.code === 'EMAIL_NOT_CONFIGURED'
           ? 'Email is not configured. Set DEV_EMAIL_LOG=true to print OTP codes in the backend terminal, or configure SMTP_USER and SMTP_PASS in .env.'
-          : 'Failed to send verification code. Please try again later.',
-        502,
-        'email_send_failed'
-      );
+          : 'Failed to send verification code. Please try again later.';
+
+      const debugMessage = !isProd
+        ? `${baseMessage}${emailErr && emailErr.message ? ` — ${emailErr.message}` : ''}${emailErr && emailErr.code ? ` (code: ${emailErr.code})` : ''}`
+        : baseMessage;
+
+      return errorResponse(res, debugMessage, 502, 'email_send_failed');
     }
+
 
     logAudit(user._id, AUDIT_ACTIONS.REGISTER, 'User', user._id.toString(), { email }, req.ip);
 
