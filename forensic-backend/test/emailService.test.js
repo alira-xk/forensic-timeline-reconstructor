@@ -19,6 +19,8 @@ const resetEmailEnv = () => {
   delete process.env.SMTP_USER;
   delete process.env.SMTP_PASS;
   delete process.env.SMTP_FORCE_IPV4;
+  delete process.env.EMAIL_PROVIDER;
+  delete process.env.RESEND_API_KEY;
 };
 
 describe('emailService', () => {
@@ -59,5 +61,40 @@ describe('emailService', () => {
       expect.objectContaining({ host: '192.0.2.10', port: 465, secure: true })
     );
     expect(sendMail).toHaveBeenCalledTimes(2);
+  });
+
+  test('sends OTP through Resend API without opening SMTP', async () => {
+    process.env.EMAIL_PROVIDER = 'resend';
+    process.env.RESEND_API_KEY = 're_test_key';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn(),
+    });
+
+    const { sendOtpEmail } = require('../src/utils/emailService');
+    await sendOtpEmail('recipient@example.com', '123456');
+
+    expect(nodemailer.createTransport).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.resend.com/emails',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer re_test_key',
+          'Content-Type': 'application/json',
+        }),
+        body: expect.any(String),
+      })
+    );
+
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body).toEqual(
+      expect.objectContaining({
+        from: 'Forensic Timeline <sender@gmail.com>',
+        to: ['recipient@example.com'],
+        subject: 'Your verification code',
+      })
+    );
+    expect(body.html).toContain('123456');
   });
 });
