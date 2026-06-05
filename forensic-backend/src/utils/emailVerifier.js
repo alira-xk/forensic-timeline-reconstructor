@@ -18,6 +18,32 @@ const getVerificationProvider = () => (
   String(process.env.EMAIL_VERIFICATION_PROVIDER || '').trim().toLowerCase()
 );
 
+const getVerificationTimeoutMs = () => {
+  const timeout = Number(process.env.EMAIL_VERIFICATION_TIMEOUT_MS || 8000);
+  return Number.isFinite(timeout) && timeout > 0 ? timeout : 8000;
+};
+
+const fetchWithTimeout = async (url, options = {}) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), getVerificationTimeoutMs());
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      const timeoutError = new Error('Email verification service timed out.');
+      timeoutError.code = 'EMAIL_VERIFICATION_TIMEOUT';
+      throw timeoutError;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
 const verifyWithAbstractApi = async (email) => {
   const apiKey = String(process.env.ABSTRACT_EMAIL_VALIDATION_API_KEY || '').trim();
   if (!apiKey) {
@@ -32,7 +58,7 @@ const verifyWithAbstractApi = async (email) => {
   url.searchParams.set('api_key', apiKey);
   url.searchParams.set('email', email);
 
-  const response = await fetch(url, { method: 'GET' });
+  const response = await fetchWithTimeout(url, { method: 'GET' });
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -88,7 +114,7 @@ const verifyWithCheckMail = async (email) => {
   }
 
   const body = new URLSearchParams({ email });
-  const response = await fetch('https://api.check-mail.org/v2/', {
+  const response = await fetchWithTimeout('https://api.check-mail.org/v2/', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -148,12 +174,23 @@ const verifyMailboxExists = async (email) => {
     };
   }
 
-  if (provider === 'abstractapi') {
-    return verifyWithAbstractApi(email);
-  }
+  try {
+    if (provider === 'abstractapi') {
+      return await verifyWithAbstractApi(email);
+    }
 
-  if (provider === 'checkmail' || provider === 'check-mail') {
-    return verifyWithCheckMail(email);
+    if (provider === 'checkmail' || provider === 'check-mail') {
+      return await verifyWithCheckMail(email);
+    }
+  } catch (err) {
+    if (err.code === 'EMAIL_VERIFICATION_TIMEOUT') {
+      return {
+        ok: false,
+        configured: true,
+        message: 'Email verification service timed out. Please try again.',
+      };
+    }
+    throw err;
   }
 
   return {

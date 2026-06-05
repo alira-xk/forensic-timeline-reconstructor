@@ -10,8 +10,14 @@ const getEmailConfig = () => ({
   fromName: process.env.EMAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'Forensic Timeline',
 });
 
+const getSmtpTimeoutMs = () => {
+  const timeout = Number(process.env.SMTP_TIMEOUT_MS || 12000);
+  return Number.isFinite(timeout) && timeout > 0 ? timeout : 12000;
+};
+
 const buildTransporter = () => {
   const config = getEmailConfig();
+  const timeout = getSmtpTimeoutMs();
 
   if (!config.user || !config.pass) {
     const error = new Error(
@@ -29,6 +35,9 @@ const buildTransporter = () => {
       user: config.user,
       pass: config.pass,
     },
+    connectionTimeout: timeout,
+    greetingTimeout: timeout,
+    socketTimeout: timeout,
   });
 };
 
