@@ -82,6 +82,16 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
         return;
       }
 
+      if (result.code === 'otp_sent') {
+        setFormSuccess('Verification code sent. Opening verification...');
+
+        redirectTimer.current = setTimeout(() => {
+          navigation.navigate('OtpVerification', { email: result.email || cleanEmail });
+        }, 800);
+
+        return;
+      }
+
       if (result.code === 'invalid_password') {
         setFormError('Invalid password. Please try again.');
         return;

@@ -200,6 +200,17 @@ const formatClerkSignInRequirement = (resource: any) => {
     : 'Login needs another verification step in Clerk.';
 };
 
+const hasEmailCodeSecondFactor = (resource: any) => {
+  const factors = [
+    ...(Array.isArray(resource?.supportedSecondFactors)
+      ? resource.supportedSecondFactors
+      : []),
+    ...(resource?.secondFactorVerification ? [resource.secondFactorVerification] : []),
+  ];
+
+  return factors.some((factor) => factor?.strategy === 'email_code');
+};
+
 const runPasswordSignIn = async (
   signIn: any,
   email: string,
@@ -343,6 +354,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const status = attempt?.status || signIn.status;
       const createdSessionId = attempt?.createdSessionId || signIn.createdSessionId;
 
+      if (status === 'needs_second_factor' && hasEmailCodeSecondFactor(attempt || signIn)) {
+        if (typeof signIn.prepareSecondFactor === 'function') {
+          await signIn.prepareSecondFactor({ strategy: 'email_code' });
+        }
+
+        return {
+          success: false,
+          code: 'otp_sent',
+          message: 'Verification code sent to your email.',
+          email: cleanEmail,
+        };
+      }
+
       if (status !== 'complete' || !createdSessionId) {
         return {
           success: false,
@@ -445,8 +469,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const verifyOtp = async (email: string, otpCode: string): Promise<OtpResult> => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanOtp = otpCode.trim();
+    const signIn = signInState.signIn as any;
     const signUpAttempt = signUpState.signUp as any;
-    const setActive = signUpState.setActive;
+    const setActive = signUpState.setActive || signInState.setActive;
 
     if (!cleanEmail || !cleanOtp) {
       return {
@@ -457,6 +482,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
+      if (
+        signIn?.status === 'needs_second_factor' &&
+        typeof signIn.attemptSecondFactor === 'function'
+      ) {
+        const loginAttempt = await signIn.attemptSecondFactor({
+          strategy: 'email_code',
+          code: cleanOtp,
+        });
+        const loginStatus = loginAttempt?.status || signIn.status;
+        const loginSessionId = loginAttempt?.createdSessionId || signIn.createdSessionId;
+
+        if (loginStatus !== 'complete' || !loginSessionId) {
+          return {
+            success: false,
+            code: 'invalid_otp',
+            message: formatClerkSignInRequirement(loginAttempt || signIn),
+            email: cleanEmail,
+          };
+        }
+
+        await setActive?.({ session: loginSessionId });
+        setUser(fallbackUserFromEmail(cleanEmail));
+
+        return {
+          success: true,
+          message: 'Login verified successfully.',
+          email: cleanEmail,
+        };
+      }
+
       const attempt = signUpAttempt.verifications?.verifyEmailCode
         ? await signUpAttempt.verifications.verifyEmailCode({ code: cleanOtp })
         : await signUpAttempt.attemptEmailAddressVerification({ code: cleanOtp });
