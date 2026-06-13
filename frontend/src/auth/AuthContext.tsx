@@ -176,24 +176,44 @@ const hasMissingUsernameRequirement = (resource: any) => {
   return missingFields.some((field) => String(field).toLowerCase().includes('username'));
 };
 
+const formatClerkSignInRequirement = (resource: any) => {
+  const status = resource?.status ? String(resource.status).replace(/_/g, ' ') : '';
+  const firstFactor =
+    resource?.supportedFirstFactors?.[0]?.strategy ||
+    resource?.firstFactorVerification?.strategy ||
+    '';
+  const secondFactor =
+    resource?.supportedSecondFactors?.[0]?.strategy ||
+    resource?.secondFactorVerification?.strategy ||
+    '';
+
+  if (secondFactor) {
+    return `Login needs a second verification step in Clerk: ${secondFactor}.`;
+  }
+
+  if (firstFactor) {
+    return `Login needs another Clerk step: ${firstFactor}.`;
+  }
+
+  return status
+    ? `Login is not complete in Clerk yet. Status: ${status}.`
+    : 'Login needs another verification step in Clerk.';
+};
+
 const runPasswordSignIn = async (
   signIn: any,
   email: string,
   password: string
 ) => {
-  if (typeof signIn.password === 'function') {
-    const passwordAttempt = await signIn.password({
-      emailAddress: email,
-      password,
-    });
-
-    if ((passwordAttempt?.status || signIn.status) === 'complete') {
-      return passwordAttempt;
-    }
-  }
-
-  const createdAttempt = await signIn.create({ identifier: email });
+  const createdAttempt = await signIn.create({
+    identifier: email,
+    password,
+  });
   const createdStatus = createdAttempt?.status || signIn.status;
+
+  if (createdStatus === 'complete') {
+    return createdAttempt;
+  }
 
   if (
     createdStatus === 'needs_first_factor' &&
@@ -327,7 +347,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return {
           success: false,
           code: 'login_failed',
-          message: 'Login needs another verification step in Clerk.',
+          message: formatClerkSignInRequirement(attempt || signIn),
           email: cleanEmail,
         };
       }
