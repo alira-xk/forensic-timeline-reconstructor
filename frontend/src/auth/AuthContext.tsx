@@ -176,6 +176,45 @@ const hasMissingUsernameRequirement = (resource: any) => {
   return missingFields.some((field) => String(field).toLowerCase().includes('username'));
 };
 
+const runPasswordSignIn = async (
+  signIn: any,
+  email: string,
+  password: string
+) => {
+  if (typeof signIn.password === 'function') {
+    const passwordAttempt = await signIn.password({
+      emailAddress: email,
+      password,
+    });
+
+    if ((passwordAttempt?.status || signIn.status) === 'complete') {
+      return passwordAttempt;
+    }
+  }
+
+  const createdAttempt = await signIn.create({ identifier: email });
+  const createdStatus = createdAttempt?.status || signIn.status;
+
+  if (
+    createdStatus === 'needs_first_factor' &&
+    typeof signIn.attemptFirstFactor === 'function'
+  ) {
+    return signIn.attemptFirstFactor({
+      strategy: 'password',
+      password,
+    });
+  }
+
+  if (typeof signIn.attemptFirstFactor === 'function') {
+    return signIn.attemptFirstFactor({
+      strategy: 'password',
+      password,
+    });
+  }
+
+  return createdAttempt;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const clerkAuth = useClerkAuth();
   const { isLoaded, isSignedIn, getToken, signOut: clerkSignOut } = clerkAuth;
@@ -279,10 +318,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      const attempt =
-        typeof signIn.password === 'function'
-          ? await signIn.password({ emailAddress: cleanEmail, password: cleanPassword })
-          : await signIn.create({ identifier: cleanEmail, password: cleanPassword });
+      const attempt = await runPasswordSignIn(signIn, cleanEmail, cleanPassword);
 
       const status = attempt?.status || signIn.status;
       const createdSessionId = attempt?.createdSessionId || signIn.createdSessionId;
