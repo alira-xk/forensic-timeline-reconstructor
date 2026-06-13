@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 import {
   useAuth as useClerkAuth,
   useSignIn,
@@ -89,6 +90,18 @@ const usernameFromEmail = (email: string) => {
 
   const normalized = username.length >= 4 ? username : `user_${username}`;
   return normalized.slice(0, 64);
+};
+
+const getWebAppBaseUrl = () => {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return undefined;
+  }
+
+  const basePath = window.location.pathname.startsWith('/forensic-timeline-reconstructor')
+    ? '/forensic-timeline-reconstructor/'
+    : '/';
+
+  return `${window.location.origin}${basePath}`;
 };
 
 const mapClerkUser = (clerkUser: any): AuthUser | null => {
@@ -419,9 +432,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (createdSessionId && setActive) {
         await setActive({ session: createdSessionId });
-        const token = await getToken();
-        const syncedUser = await fetchBackendUser(token).catch(() => null);
-        setUser(syncedUser || fallbackUserFromEmail(cleanEmail));
+        setUser(fallbackUserFromEmail(cleanEmail));
       }
 
       return {
@@ -548,8 +559,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    await clerkSignOut();
     setUser(null);
+    const redirectUrl = getWebAppBaseUrl();
+    if (redirectUrl) {
+      await (clerkSignOut as any)({ redirectUrl });
+    } else {
+      await clerkSignOut();
+    }
+
+    if (redirectUrl && window.location.href !== redirectUrl) {
+      window.history.replaceState(null, '', redirectUrl);
+    }
   };
 
   const value = useMemo(
