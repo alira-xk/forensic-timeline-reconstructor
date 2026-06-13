@@ -4,7 +4,7 @@ import {
   useSignIn,
   useSignUp,
   useUser,
-} from '@clerk/expo';
+} from './clerkBindings';
 
 import { API_BASE_URL, setAuthTokenProvider } from '../services/api';
 import {

@@ -1,11 +1,10 @@
 import React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ClerkProvider } from '@clerk/expo';
-import { tokenCache } from '@clerk/expo/token-cache';
 import { AppNavigator } from './src/navigation';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { AuthProvider } from './src/auth/AuthContext';
+import { AppClerkProvider } from './src/auth/clerkBindings';
 import { ConfirmationDialog } from './src/components/ConfirmationDialog';
 
 const clerkPublishableKey =
@@ -25,7 +24,7 @@ const AppContent = () => {
 
 export default function App() {
   return (
-    <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache}>
+    <AppClerkProvider publishableKey={clerkPublishableKey}>
       <ThemeProvider>
         <AuthProvider>
           <SafeAreaProvider>
@@ -33,6 +32,6 @@ export default function App() {
           </SafeAreaProvider>
         </AuthProvider>
       </ThemeProvider>
-    </ClerkProvider>
+    </AppClerkProvider>
   );
 }

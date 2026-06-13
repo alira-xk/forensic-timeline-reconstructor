@@ -8,10 +8,11 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "build:web": "expo export --platform web --clear"
+    "build:web": "expo export --platform web --clear && node scripts/patch-web-export.js"
   },
   "dependencies": {
     "@clerk/expo": "^3.4.2",
+    "@clerk/react": "^6.9.1",
     "@react-native-async-storage/async-storage": "^2.1.1",
     "@react-navigation/bottom-tabs": "^7.9.0",
     "@react-navigation/native": "^7.1.26",
