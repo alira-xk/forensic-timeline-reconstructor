@@ -1,11 +1,6 @@
 import React from 'react';
-import {
-  ClerkProvider,
-  useAuth,
-  useSignIn,
-  useSignUp,
-  useUser,
-} from '@clerk/expo';
+import { ClerkProvider, useAuth, useUser } from '@clerk/expo';
+import { useSignIn, useSignUp } from '@clerk/expo/legacy';
 import { tokenCache } from '@clerk/expo/token-cache';
 
 type AppClerkProviderProps = {
