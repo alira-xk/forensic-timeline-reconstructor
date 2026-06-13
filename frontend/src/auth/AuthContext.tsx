@@ -78,6 +78,19 @@ const splitDisplayName = (name: string) => {
   return { firstName, lastName };
 };
 
+const usernameFromEmail = (email: string) => {
+  const username = email
+    .trim()
+    .toLowerCase()
+    .replace('@', '_')
+    .replace(/[^a-z0-9_-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  const normalized = username.length >= 4 ? username : `user_${username}`;
+  return normalized.slice(0, 64);
+};
+
 const mapClerkUser = (clerkUser: any): AuthUser | null => {
   if (!clerkUser) {
     return null;
@@ -139,6 +152,15 @@ const formatClerkMissingRequirements = (resource: any) => {
   );
 
   return `OTP verified, but Clerk still needs: ${labels.join(', ')}.`;
+};
+
+const hasMissingUsernameRequirement = (resource: any) => {
+  const missingFields = [
+    ...(Array.isArray(resource?.missingFields) ? resource.missingFields : []),
+    ...(Array.isArray(resource?.missingRequirements) ? resource.missingRequirements : []),
+  ];
+
+  return missingFields.some((field) => String(field).toLowerCase().includes('username'));
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -288,6 +310,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const password = input.password.trim();
     const signUpAttempt = signUpState.signUp as any;
     const { firstName, lastName } = splitDisplayName(name);
+    const username = usernameFromEmail(email);
 
     if (!name || !email || !password) {
       return {
@@ -310,6 +333,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await signUpAttempt.password({
           emailAddress: email,
           password,
+          username,
           firstName,
           ...(lastName ? { lastName } : {}),
           unsafeMetadata: { name },
@@ -318,6 +342,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await signUpAttempt.create({
           emailAddress: email,
           password,
+          username,
           firstName,
           ...(lastName ? { lastName } : {}),
           unsafeMetadata: { name },
@@ -367,14 +392,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? await signUpAttempt.verifications.verifyEmailCode({ code: cleanOtp })
         : await signUpAttempt.attemptEmailAddressVerification({ code: cleanOtp });
 
-      const status = attempt?.status || signUpAttempt.status;
-      const createdSessionId = attempt?.createdSessionId || signUpAttempt.createdSessionId;
+      let status = attempt?.status || signUpAttempt.status;
+      let createdSessionId = attempt?.createdSessionId || signUpAttempt.createdSessionId;
+      let latestAttempt = attempt || signUpAttempt;
+
+      if (
+        status !== 'complete' &&
+        hasMissingUsernameRequirement(latestAttempt) &&
+        typeof signUpAttempt.update === 'function'
+      ) {
+        latestAttempt = await signUpAttempt.update({
+          username: usernameFromEmail(cleanEmail),
+        });
+        status = latestAttempt?.status || signUpAttempt.status;
+        createdSessionId = latestAttempt?.createdSessionId || signUpAttempt.createdSessionId;
+      }
 
       if (status !== 'complete') {
         return {
           success: false,
           code: 'invalid_otp',
-          message: formatClerkMissingRequirements(attempt || signUpAttempt),
+          message: formatClerkMissingRequirements(latestAttempt),
           email: cleanEmail,
         };
       }
