@@ -14,7 +14,10 @@
     },
     "ios": {
       "bundleIdentifier": "com.alira.forensictimeline",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.alira.forensictimeline",
