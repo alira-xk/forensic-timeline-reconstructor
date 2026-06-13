@@ -200,15 +200,18 @@ const formatClerkSignInRequirement = (resource: any) => {
     : 'Login needs another verification step in Clerk.';
 };
 
-const hasEmailCodeSecondFactor = (resource: any) => {
-  const factors = [
-    ...(Array.isArray(resource?.supportedSecondFactors)
-      ? resource.supportedSecondFactors
-      : []),
-    ...(resource?.secondFactorVerification ? [resource.secondFactorVerification] : []),
-  ];
+const getEmailCodeSecondFactor = (...resources: any[]) => {
+  for (const resource of resources) {
+    const factor = resource?.supportedSecondFactors?.find(
+      (candidate: any) => candidate?.strategy === 'email_code'
+    );
 
-  return factors.some((factor) => factor?.strategy === 'email_code');
+    if (factor) {
+      return factor;
+    }
+  }
+
+  return null;
 };
 
 const runPasswordSignIn = async (
@@ -354,9 +357,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const status = attempt?.status || signIn.status;
       const createdSessionId = attempt?.createdSessionId || signIn.createdSessionId;
 
-      if (status === 'needs_second_factor' && hasEmailCodeSecondFactor(attempt || signIn)) {
+      if (status === 'needs_second_factor') {
+        const emailCodeFactor = getEmailCodeSecondFactor(attempt, signIn);
+
+        if (!emailCodeFactor?.emailAddressId) {
+          return {
+            success: false,
+            code: 'login_failed',
+            message: formatClerkSignInRequirement(attempt || signIn),
+            email: cleanEmail,
+          };
+        }
+
         if (typeof signIn.prepareSecondFactor === 'function') {
-          await signIn.prepareSecondFactor({ strategy: 'email_code' });
+          await signIn.prepareSecondFactor({
+            strategy: 'email_code',
+            emailAddressId: emailCodeFactor.emailAddressId,
+          });
         }
 
         return {
@@ -563,6 +580,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resendOtp = async (email: string): Promise<OtpResult> => {
     const cleanEmail = email.trim().toLowerCase();
+    const signIn = signInState.signIn as any;
     const signUpAttempt = signUpState.signUp as any;
 
     if (!cleanEmail) {
@@ -574,7 +592,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      if (signUpAttempt.verifications?.sendEmailCode) {
+      if (
+        signIn?.status === 'needs_second_factor' &&
+        typeof signIn.prepareSecondFactor === 'function'
+      ) {
+        const emailCodeFactor = getEmailCodeSecondFactor(signIn);
+
+        if (!emailCodeFactor?.emailAddressId) {
+          throw new Error('Clerk email verification method is unavailable.');
+        }
+
+        await signIn.prepareSecondFactor({
+          strategy: 'email_code',
+          emailAddressId: emailCodeFactor.emailAddressId,
+        });
+      } else if (signUpAttempt.verifications?.sendEmailCode) {
         await signUpAttempt.verifications.sendEmailCode();
       } else {
         await signUpAttempt.prepareEmailAddressVerification({
