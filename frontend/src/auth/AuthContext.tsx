@@ -70,6 +70,14 @@ const fallbackUserFromEmail = (email: string): AuthUser => ({
   role: 'investigator',
 });
 
+const splitDisplayName = (name: string) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const firstName = parts[0] || 'Investigator';
+  const lastName = parts.length > 1 ? parts.slice(1).join(' ') : undefined;
+
+  return { firstName, lastName };
+};
+
 const mapClerkUser = (clerkUser: any): AuthUser | null => {
   if (!clerkUser) {
     return null;
@@ -112,6 +120,25 @@ const clerkErrorCode = (error: any, fallback: AuthFailureCode): AuthFailureCode 
   if (code.includes('email')) return 'invalid_email';
 
   return fallback;
+};
+
+const formatClerkMissingRequirements = (resource: any) => {
+  const missingFields = [
+    ...(Array.isArray(resource?.missingFields) ? resource.missingFields : []),
+    ...(Array.isArray(resource?.missingRequirements) ? resource.missingRequirements : []),
+  ];
+
+  if (!missingFields.length) {
+    return 'OTP verification is not complete.';
+  }
+
+  const labels = missingFields.map((field) =>
+    String(field)
+      .replace(/^profile_/, '')
+      .replace(/_/g, ' ')
+  );
+
+  return `OTP verified, but Clerk still needs: ${labels.join(', ')}.`;
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -260,6 +287,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const email = input.email.trim().toLowerCase();
     const password = input.password.trim();
     const signUpAttempt = signUpState.signUp as any;
+    const { firstName, lastName } = splitDisplayName(name);
 
     if (!name || !email || !password) {
       return {
@@ -282,14 +310,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await signUpAttempt.password({
           emailAddress: email,
           password,
-          firstName: name,
+          firstName,
+          ...(lastName ? { lastName } : {}),
           unsafeMetadata: { name },
         });
       } else {
         await signUpAttempt.create({
           emailAddress: email,
           password,
-          firstName: name,
+          firstName,
+          ...(lastName ? { lastName } : {}),
           unsafeMetadata: { name },
         });
       }
@@ -340,19 +370,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const status = attempt?.status || signUpAttempt.status;
       const createdSessionId = attempt?.createdSessionId || signUpAttempt.createdSessionId;
 
-      if (status !== 'complete' || !createdSessionId) {
+      if (status !== 'complete') {
         return {
           success: false,
           code: 'invalid_otp',
-          message: 'OTP verification is not complete.',
+          message: formatClerkMissingRequirements(attempt || signUpAttempt),
           email: cleanEmail,
         };
       }
 
-      await setActive?.({ session: createdSessionId });
-      const token = await getToken();
-      const syncedUser = await fetchBackendUser(token).catch(() => null);
-      setUser(syncedUser || fallbackUserFromEmail(cleanEmail));
+      if (createdSessionId && setActive) {
+        await setActive({ session: createdSessionId });
+        const token = await getToken();
+        const syncedUser = await fetchBackendUser(token).catch(() => null);
+        setUser(syncedUser || fallbackUserFromEmail(cleanEmail));
+      }
 
       return {
         success: true,
