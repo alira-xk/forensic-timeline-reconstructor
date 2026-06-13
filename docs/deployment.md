@@ -27,7 +27,7 @@ Set these environment variables in the hosting dashboard:
 - `MONGODB_URI` with a MongoDB Atlas connection string
 - `JWT_ACCESS_SECRET`
 - `JWT_REFRESH_SECRET`
-- SMTP values such as `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`
+- `CLERK_SECRET_KEY` from the Clerk Dashboard API keys page
 - AI values such as `AI_PROVIDER=groq`, `GROQ_API_KEY`, and `GROQ_MODEL`
 
 For Render deploy hooks, add this GitHub repository secret:
@@ -44,5 +44,6 @@ In GitHub repository settings:
 
 - Pages source: GitHub Actions
 - Repository variable: `EXPO_PUBLIC_API_URL=https://your-backend-domain/api`
+- Repository variable: `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...` from Clerk
 
 Then run the `Deploy Frontend to GitHub Pages` workflow manually, or push frontend changes to `main`.

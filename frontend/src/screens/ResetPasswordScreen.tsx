@@ -17,12 +17,13 @@ import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { useTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../types/navigation';
-import { API_BASE_URL } from '../services/api';
+import { useAuth } from '../auth/AuthContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ResetPassword'>;
 
 export const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
   const { theme } = useTheme();
+  const { resetPassword } = useAuth();
   const resetEmail = route.params?.email?.trim().toLowerCase() || '';
   const [token, setToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -48,15 +49,9 @@ export const ResetPasswordScreen: React.FC<Props> = ({ navigation, route }) => {
     try {
       setIsLoading(true);
 
-      const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail || undefined, token: token.trim(), newPassword }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to reset password.');
+      const result = await resetPassword(resetEmail, token.trim(), newPassword);
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to reset password.');
       }
 
       Alert.alert('Password Updated', 'You can now log in with your new password.');

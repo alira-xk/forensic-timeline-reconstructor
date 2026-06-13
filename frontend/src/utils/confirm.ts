@@ -40,7 +40,11 @@ const getActionDetails = (title: string) => {
   return { confirmLabel: 'Delete', destructive: true };
 };
 
-export const confirmDialog = (title: string, message: string) => {
+export const confirmDialog = (
+  title: string,
+  message: string,
+  options?: Partial<Pick<ConfirmationRequest, 'confirmLabel' | 'destructive'>>
+) => {
   return new Promise<boolean>((resolve) => {
     if (pendingRequest) {
       pendingRequest.resolve(false);
@@ -52,6 +56,7 @@ export const confirmDialog = (title: string, message: string) => {
       message,
       resolve,
       ...action,
+      ...options,
     };
     listener?.(pendingRequest);
   });

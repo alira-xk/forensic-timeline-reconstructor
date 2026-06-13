@@ -16,12 +16,13 @@ import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { useTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../types/navigation';
-import { API_BASE_URL } from '../services/api';
+import { useAuth } from '../auth/AuthContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ForgotPassword'>;
 
 export const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
   const { theme } = useTheme();
+  const { requestPasswordReset } = useAuth();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -40,23 +41,12 @@ export const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
       setMessage('');
       setErrorMessage('');
 
-      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to send reset email.');
+      const result = await requestPasswordReset(cleanEmail);
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to send reset code.');
       }
 
-      const resetToken = data?.data?.resetToken as string | undefined;
-      if (resetToken) {
-        setMessage(`Reset token (dev): ${resetToken}`);
-      } else {
-        setMessage('Reset token sent. Check your email.');
-      }
+      setMessage(result.message || 'Reset code sent. Check your email.');
       navigation.navigate('ResetPassword', { email: cleanEmail });
     } catch (error: any) {
       setMessage('');

@@ -37,6 +37,25 @@ SEVERITY_PATTERNS = [
 MAX_EVENTS = 500
 
 
+def build_file_modified_event(file_path):
+    """Return a filesystem modification event for the uploaded log file."""
+    file_mtime = datetime.fromtimestamp(os.path.getmtime(file_path), tz=timezone.utc)
+    timestamp = file_mtime.isoformat()
+
+    return {
+        "timestamp": timestamp,
+        "original_timestamp": timestamp,
+        "event_type": "file_modified",
+        "title": "Log File Modified",
+        "description": "Log file modification time from filesystem metadata",
+        "metadata": {
+            "source_property": "filesystem.mtime",
+        },
+        "confidence": 60,
+        "tags": ["log", "modification"]
+    }
+
+
 def parse_timestamp(raw_ts, fmt_type):
     """Parse a raw timestamp string into ISO 8601 format."""
     try:
@@ -93,12 +112,18 @@ def severity_to_event_type(severity):
 
 def extract_log(file_path):
     events = []
+    file_modified_event = None
+
+    try:
+        file_modified_event = build_file_modified_event(file_path)
+    except Exception:
+        file_modified_event = None
 
     try:
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             lines = f.readlines()
     except Exception:
-        return events
+        return [file_modified_event] if file_modified_event else events
 
     parsed_events = []
     last_timestamp = None
@@ -177,5 +202,8 @@ def extract_log(file_path):
             sampled.append(parsed_events[int(idx)])
             idx += step
         parsed_events = sampled
+
+    if file_modified_event:
+        parsed_events.append(file_modified_event)
 
     return parsed_events

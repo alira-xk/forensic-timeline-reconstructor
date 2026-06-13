@@ -4,6 +4,7 @@ export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 const SESSION_KEY = 'forensic_timeline_session';
+let authTokenProvider: (() => Promise<string | null>) | null = null;
 
 type SessionPayload = {
   user: { _id: string };
@@ -24,8 +25,18 @@ const getSessionPayload = async (): Promise<SessionPayload | null> => {
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
+  if (authTokenProvider) {
+    return authTokenProvider();
+  }
+
   const session = await getSessionPayload();
   return session?.accessToken || null;
+};
+
+export const setAuthTokenProvider = (
+  provider: (() => Promise<string | null>) | null
+) => {
+  authTokenProvider = provider;
 };
 
 export const setSessionTokens = async (
@@ -40,6 +51,10 @@ export const setSessionTokens = async (
 };
 
 const refreshAccessToken = async () => {
+  if (authTokenProvider) {
+    return null;
+  }
+
   const session = await getSessionPayload();
   if (!session?.refreshToken) {
     return null;
@@ -64,8 +79,7 @@ export const apiRequest = async (
   endpoint: string,
   options: RequestInit = {}
 ) => {
-  const session = await getSessionPayload();
-  const accessToken = session?.accessToken;
+  const accessToken = await getAccessToken();
 
   const headers = {
     'Content-Type': 'application/json',

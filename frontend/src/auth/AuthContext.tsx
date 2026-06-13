@@ -1,10 +1,18 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
+  useAuth as useClerkAuth,
+  useSignIn,
+  useSignUp,
+  useUser,
+} from '@clerk/expo';
+
+import { API_BASE_URL, setAuthTokenProvider } from '../services/api';
+import {
+  AuthFailureCode,
   AuthResult,
   AuthUser,
   OtpResult,
   SignUpInput,
-  authService,
 } from './authService';
 
 type AuthContextValue = {
@@ -14,6 +22,12 @@ type AuthContextValue = {
   signUp: (input: SignUpInput) => Promise<AuthResult>;
   verifyOtp: (email: string, otpCode: string) => Promise<OtpResult>;
   resendOtp: (email: string) => Promise<OtpResult>;
+  requestPasswordReset: (email: string) => Promise<OtpResult>;
+  resetPassword: (
+    email: string,
+    code: string,
+    newPassword: string
+  ) => Promise<OtpResult>;
   signOut: () => Promise<void>;
 };
 
@@ -38,82 +52,452 @@ const AuthContext = createContext<AuthContextValue>({
     success: false,
     message: 'OTP resend is unavailable.',
   }),
+  requestPasswordReset: async () => ({
+    success: false,
+    message: 'Password reset is unavailable.',
+  }),
+  resetPassword: async () => ({
+    success: false,
+    message: 'Password reset is unavailable.',
+  }),
   signOut: async () => {},
 });
 
+const fallbackUserFromEmail = (email: string): AuthUser => ({
+  _id: email,
+  name: email.split('@')[0] || 'Investigator',
+  email,
+  role: 'investigator',
+});
+
+const mapClerkUser = (clerkUser: any): AuthUser | null => {
+  if (!clerkUser) {
+    return null;
+  }
+
+  const email =
+    clerkUser.primaryEmailAddress?.emailAddress ||
+    clerkUser.emailAddresses?.[0]?.emailAddress ||
+    '';
+  const name =
+    clerkUser.fullName ||
+    [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') ||
+    (email ? email.split('@')[0] : 'Investigator');
+
+  return {
+    _id: clerkUser.id,
+    name,
+    email,
+    role: 'investigator',
+    createdAt: clerkUser.createdAt ? String(clerkUser.createdAt) : undefined,
+  };
+};
+
+const clerkErrorMessage = (error: any, fallback: string) => {
+  return (
+    error?.errors?.[0]?.longMessage ||
+    error?.errors?.[0]?.message ||
+    error?.message ||
+    fallback
+  );
+};
+
+const clerkErrorCode = (error: any, fallback: AuthFailureCode): AuthFailureCode => {
+  const code = String(error?.errors?.[0]?.code || '').toLowerCase();
+
+  if (code.includes('password')) return 'invalid_password';
+  if (code.includes('identifier') || code.includes('not_found')) return 'account_not_found';
+  if (code.includes('verification') || code.includes('code')) return 'invalid_otp';
+  if (code.includes('exists') || code.includes('taken')) return 'account_exists';
+  if (code.includes('email')) return 'invalid_email';
+
+  return fallback;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const clerkAuth = useClerkAuth();
+  const { isLoaded, isSignedIn, getToken, signOut: clerkSignOut } = clerkAuth;
+  const { user: clerkUser } = useUser();
+  const signInResource = useSignIn();
+  const signUpResource = useSignUp();
+  const signInState = signInResource as any;
+  const signUpState = signUpResource as any;
+
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [isSyncingBackendUser, setIsSyncingBackendUser] = useState(false);
+
+  const isInitializing = !isLoaded || isSyncingBackendUser;
+
+  useEffect(() => {
+    setAuthTokenProvider(() => getToken());
+
+    return () => {
+      setAuthTokenProvider(null);
+    };
+  }, [getToken]);
+
+  const fetchBackendUser = async (token?: string | null) => {
+    const activeToken = token || (await getToken());
+    if (!activeToken) {
+      return null;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${activeToken}`,
+      },
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Unable to sync Clerk user with API.');
+    }
+
+    return data.data?.user as AuthUser;
+  };
 
   useEffect(() => {
     let isMounted = true;
 
-    authService
-      .getSession()
-      .then((sessionUser) => {
+    const syncUser = async () => {
+      if (!isLoaded) {
+        return;
+      }
+
+      if (!isSignedIn) {
+        setUser(null);
+        return;
+      }
+
+      setIsSyncingBackendUser(true);
+
+      try {
+        const backendUser = await fetchBackendUser();
         if (isMounted) {
-          setUser(sessionUser);
+          setUser(backendUser || mapClerkUser(clerkUser));
         }
-      })
-      .finally(() => {
+      } catch {
         if (isMounted) {
-          setIsInitializing(false);
+          setUser(mapClerkUser(clerkUser));
         }
-      });
+      } finally {
+        if (isMounted) {
+          setIsSyncingBackendUser(false);
+        }
+      }
+    };
+
+    syncUser();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isLoaded, isSignedIn, clerkUser?.id]);
 
-  const login = async (email: string, password: string) => {
-    const result = await authService.login(email, password);
+  const login = async (email: string, password: string): Promise<AuthResult> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+    const signIn = signInState.signIn as any;
+    const setActive = signInState.setActive;
 
-    if (result.success) {
-      setUser(result.user);
+    if (!cleanEmail || !cleanPassword) {
+      return {
+        success: false,
+        code: 'missing_fields',
+        message: 'Email and password are required.',
+      };
     }
 
-    return result;
+    if (!signInState.isLoaded || !signIn) {
+      return {
+        success: false,
+        code: 'network_error',
+        message: 'Authentication is still loading. Please try again.',
+      };
+    }
+
+    try {
+      const attempt =
+        typeof signIn.password === 'function'
+          ? await signIn.password({ emailAddress: cleanEmail, password: cleanPassword })
+          : await signIn.create({ identifier: cleanEmail, password: cleanPassword });
+
+      const status = attempt?.status || signIn.status;
+      const createdSessionId = attempt?.createdSessionId || signIn.createdSessionId;
+
+      if (status !== 'complete' || !createdSessionId) {
+        return {
+          success: false,
+          code: 'login_failed',
+          message: 'Login needs another verification step in Clerk.',
+          email: cleanEmail,
+        };
+      }
+
+      await setActive?.({ session: createdSessionId });
+      const token = await getToken();
+      const syncedUser = await fetchBackendUser(token).catch(() => null);
+      const nextUser = syncedUser || fallbackUserFromEmail(cleanEmail);
+      setUser(nextUser);
+
+      return {
+        success: true,
+        user: nextUser,
+        message: 'Login successful.',
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        code: clerkErrorCode(error, 'login_failed'),
+        message: clerkErrorMessage(error, 'Login failed.'),
+        email: cleanEmail,
+      };
+    }
   };
 
-  const signUp = async (input: SignUpInput) => {
-    const result = await authService.signUp(input);
+  const signUp = async (input: SignUpInput): Promise<AuthResult> => {
+    const name = input.name.trim();
+    const email = input.email.trim().toLowerCase();
+    const password = input.password.trim();
+    const signUpAttempt = signUpState.signUp as any;
 
-    if (result.success) {
-      setUser(result.user);
+    if (!name || !email || !password) {
+      return {
+        success: false,
+        code: 'missing_fields',
+        message: 'Name, email and password are required.',
+      };
     }
 
-    return result;
+    if (!signUpState.isLoaded || !signUpAttempt) {
+      return {
+        success: false,
+        code: 'network_error',
+        message: 'Authentication is still loading. Please try again.',
+      };
+    }
+
+    try {
+      if (typeof signUpAttempt.password === 'function') {
+        await signUpAttempt.password({
+          emailAddress: email,
+          password,
+          firstName: name,
+          unsafeMetadata: { name },
+        });
+      } else {
+        await signUpAttempt.create({
+          emailAddress: email,
+          password,
+          firstName: name,
+          unsafeMetadata: { name },
+        });
+      }
+
+      if (signUpAttempt.verifications?.sendEmailCode) {
+        await signUpAttempt.verifications.sendEmailCode();
+      } else {
+        await signUpAttempt.prepareEmailAddressVerification({
+          strategy: 'email_code',
+        });
+      }
+
+      return {
+        success: false,
+        code: 'otp_sent',
+        message: 'Verification code sent to your email.',
+        email,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        code: clerkErrorCode(error, 'signup_failed'),
+        message: clerkErrorMessage(error, 'Signup failed.'),
+        email,
+      };
+    }
+  };
+
+  const verifyOtp = async (email: string, otpCode: string): Promise<OtpResult> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanOtp = otpCode.trim();
+    const signUpAttempt = signUpState.signUp as any;
+    const setActive = signUpState.setActive;
+
+    if (!cleanEmail || !cleanOtp) {
+      return {
+        success: false,
+        code: 'missing_fields',
+        message: 'Email and OTP code are required.',
+      };
+    }
+
+    try {
+      const attempt = signUpAttempt.verifications?.verifyEmailCode
+        ? await signUpAttempt.verifications.verifyEmailCode({ code: cleanOtp })
+        : await signUpAttempt.attemptEmailAddressVerification({ code: cleanOtp });
+
+      const status = attempt?.status || signUpAttempt.status;
+      const createdSessionId = attempt?.createdSessionId || signUpAttempt.createdSessionId;
+
+      if (status !== 'complete' || !createdSessionId) {
+        return {
+          success: false,
+          code: 'invalid_otp',
+          message: 'OTP verification is not complete.',
+          email: cleanEmail,
+        };
+      }
+
+      await setActive?.({ session: createdSessionId });
+      const token = await getToken();
+      const syncedUser = await fetchBackendUser(token).catch(() => null);
+      setUser(syncedUser || fallbackUserFromEmail(cleanEmail));
+
+      return {
+        success: true,
+        message: 'Account verified successfully.',
+        email: cleanEmail,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        code: clerkErrorCode(error, 'invalid_otp'),
+        message: clerkErrorMessage(error, 'OTP verification failed.'),
+        email: cleanEmail,
+      };
+    }
+  };
+
+  const resendOtp = async (email: string): Promise<OtpResult> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const signUpAttempt = signUpState.signUp as any;
+
+    if (!cleanEmail) {
+      return {
+        success: false,
+        code: 'missing_fields',
+        message: 'Email is required.',
+      };
+    }
+
+    try {
+      if (signUpAttempt.verifications?.sendEmailCode) {
+        await signUpAttempt.verifications.sendEmailCode();
+      } else {
+        await signUpAttempt.prepareEmailAddressVerification({
+          strategy: 'email_code',
+        });
+      }
+
+      return {
+        success: true,
+        message: 'OTP resent successfully.',
+        email: cleanEmail,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        code: clerkErrorCode(error, 'otp_not_found'),
+        message: clerkErrorMessage(error, 'Failed to resend OTP.'),
+        email: cleanEmail,
+      };
+    }
+  };
+
+  const requestPasswordReset = async (email: string): Promise<OtpResult> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const signIn = signInState.signIn as any;
+
+    if (!cleanEmail) {
+      return {
+        success: false,
+        code: 'missing_fields',
+        message: 'Email is required.',
+      };
+    }
+
+    try {
+      await signIn.create({
+        strategy: 'reset_password_email_code',
+        identifier: cleanEmail,
+      });
+
+      return {
+        success: true,
+        message: 'Reset code sent. Check your email.',
+        email: cleanEmail,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        code: clerkErrorCode(error, 'unknown_error'),
+        message: clerkErrorMessage(error, 'Unable to request reset code.'),
+        email: cleanEmail,
+      };
+    }
+  };
+
+  const resetPassword = async (
+    email: string,
+    code: string,
+    newPassword: string
+  ): Promise<OtpResult> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanCode = code.trim();
+    const signIn = signInState.signIn as any;
+
+    if (!cleanEmail || !cleanCode || !newPassword.trim()) {
+      return {
+        success: false,
+        code: 'missing_fields',
+        message: 'Email, reset code and password are required.',
+      };
+    }
+
+    try {
+      await signIn.attemptFirstFactor({
+        strategy: 'reset_password_email_code',
+        code: cleanCode,
+        password: newPassword,
+      });
+
+      return {
+        success: true,
+        message: 'Password updated. You can now log in.',
+        email: cleanEmail,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        code: clerkErrorCode(error, 'unknown_error'),
+        message: clerkErrorMessage(error, 'Unable to reset password.'),
+        email: cleanEmail,
+      };
+    }
   };
 
   const signOut = async () => {
-    await authService.signOut();
+    await clerkSignOut();
     setUser(null);
   };
 
-  const verifyOtp = async (email: string, otpCode: string) => {
-    return authService.verifyOtp(email, otpCode);
-  };
-
-  const resendOtp = async (email: string) => {
-    return authService.resendOtp(email);
-  };
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isInitializing,
-        login,
-        signUp,
-        verifyOtp,
-        resendOtp,
-        signOut,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      isInitializing,
+      login,
+      signUp,
+      verifyOtp,
+      resendOtp,
+      requestPasswordReset,
+      resetPassword,
+      signOut,
+    }),
+    [user, isInitializing, signInResource, signUpResource]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => useContext(AuthContext);

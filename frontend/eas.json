@@ -1,0 +1,26 @@
+{
+  "cli": {
+    "version": ">= 16.0.0"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://forensic-timeline-reconstructor.onrender.com/api",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_Y2hhbXBpb24tcmVwdGlsZS0yNC5jbGVyay5hY2NvdW50cy5kZXYk"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://forensic-timeline-reconstructor.onrender.com/api",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_Y2hhbXBpb24tcmVwdGlsZS0yNC5jbGVyay5hY2NvdW50cy5kZXYk"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  }
+}

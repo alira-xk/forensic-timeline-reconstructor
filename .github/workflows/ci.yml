@@ -57,6 +57,8 @@ jobs:
     defaults:
       run:
         working-directory: frontend
+    env:
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

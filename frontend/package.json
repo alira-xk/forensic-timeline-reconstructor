@@ -11,6 +11,7 @@
     "build:web": "expo export --platform web --clear"
   },
   "dependencies": {
+    "@clerk/expo": "^3.4.2",
     "@react-native-async-storage/async-storage": "^2.1.1",
     "@react-navigation/bottom-tabs": "^7.9.0",
     "@react-navigation/native": "^7.1.26",
@@ -19,6 +20,7 @@
     "expo-document-picker": "^14.0.8",
     "expo-file-system": "^19.0.21",
     "expo-linear-gradient": "^15.0.8",
+    "expo-secure-store": "~15.0.8",
     "expo-status-bar": "~3.0.9",
     "lucide-react-native": "^0.562.0",
     "react": "19.1.0",

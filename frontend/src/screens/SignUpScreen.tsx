@@ -12,6 +12,7 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   ArrowLeft,
+  Circle,
   CheckCircle,
   MailCheck,
   Moon,
@@ -40,6 +41,7 @@ export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -80,20 +82,26 @@ export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
     passwordRules.number &&
     passwordRules.special;
 
+  const passwordRuleItems = [
+    { label: 'At least 8 characters', passed: passwordRules.minLength },
+    { label: 'One uppercase letter', passed: passwordRules.uppercase },
+    { label: 'One lowercase letter', passed: passwordRules.lowercase },
+    { label: 'One number', passed: passwordRules.number },
+    { label: 'One special character', passed: passwordRules.special },
+  ];
+
+  const completedPasswordRules = passwordRuleItems.filter((rule) => rule.passed).length;
+  const remainingPasswordRules = passwordRuleItems.length - completedPasswordRules;
+  const passwordProgress = completedPasswordRules / passwordRuleItems.length;
+  const shouldShowPasswordRules = isPasswordFocused || password.length > 0;
+
   const renderPasswordRule = (label: string, passed: boolean) => (
     <View style={styles.passwordRuleRow}>
-      <Text
-        style={[
-          styles.passwordRuleIcon,
-          {
-            color: passed
-              ? theme.colors.status.success
-              : theme.colors.text.secondary,
-          },
-        ]}
-      >
-        {passed ? 'OK' : '-'}
-      </Text>
+      {passed ? (
+        <CheckCircle size={15} color={theme.colors.status.success} />
+      ) : (
+        <Circle size={15} color={theme.colors.text.muted} />
+      )}
 
       <Text
         style={[
@@ -106,6 +114,19 @@ export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
         ]}
       >
         {label}
+      </Text>
+
+      <Text
+        style={[
+          styles.passwordRuleStatus,
+          {
+            color: passed
+              ? theme.colors.status.success
+              : theme.colors.text.muted,
+          },
+        ]}
+      >
+        {passed ? 'Done' : 'Needed'}
       </Text>
     </View>
   );
@@ -302,44 +323,77 @@ export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
                 setPassword(value);
                 clearMessages();
               }}
+              onFocus={() => setIsPasswordFocused(true)}
+              onBlur={() => setIsPasswordFocused(false)}
               secureTextEntry
             />
 
-            <View
-              style={[
-                styles.passwordRulesBox,
-                {
-                  backgroundColor: theme.colors.surfaceHighlight,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-            >
-              <View style={styles.passwordRulesHeader}>
-                <CheckCircle
-                  size={15}
-                  color={
-                    isPasswordStrong
-                      ? theme.colors.status.success
-                      : theme.colors.text.secondary
-                  }
-                />
+            {shouldShowPasswordRules ? (
+              <View
+                style={[
+                  styles.passwordRulesBox,
+                  {
+                    backgroundColor: theme.colors.surfaceHighlight,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.passwordRulesHeader}>
+                  <CheckCircle
+                    size={15}
+                    color={
+                      isPasswordStrong
+                        ? theme.colors.status.success
+                        : theme.colors.text.secondary
+                    }
+                  />
 
-                <Text
-                  style={[
-                    styles.passwordRulesTitle,
-                    { color: theme.colors.text.primary },
-                  ]}
-                >
-                  Password must contain:
-                </Text>
+                  <Text
+                    style={[
+                      styles.passwordRulesTitle,
+                      { color: theme.colors.text.primary },
+                    ]}
+                  >
+                    Password must contain:
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.passwordRulesSummary,
+                      {
+                        color: isPasswordStrong
+                          ? theme.colors.status.success
+                          : theme.colors.text.secondary,
+                      },
+                    ]}
+                  >
+                    {isPasswordStrong
+                      ? 'Ready'
+                      : `${completedPasswordRules}/${passwordRuleItems.length} done, ${remainingPasswordRules} left`}
+                  </Text>
+                </View>
+
+                <View style={[styles.passwordProgressTrack, { backgroundColor: theme.colors.border }]}>
+                  <View
+                    style={[
+                      styles.passwordProgressFill,
+                      {
+                        width: `${passwordProgress * 100}%`,
+                        backgroundColor: isPasswordStrong
+                          ? theme.colors.status.success
+                          : theme.colors.primary,
+                      },
+                    ]}
+                  />
+                </View>
+
+                {passwordRuleItems.map((rule) => (
+                  <React.Fragment key={rule.label}>
+                    {renderPasswordRule(rule.label, rule.passed)}
+                  </React.Fragment>
+                ))}
               </View>
-
-              {renderPasswordRule('At least 8 characters', passwordRules.minLength)}
-              {renderPasswordRule('One uppercase letter', passwordRules.uppercase)}
-              {renderPasswordRule('One lowercase letter', passwordRules.lowercase)}
-              {renderPasswordRule('One number', passwordRules.number)}
-              {renderPasswordRule('One special character', passwordRules.special)}
-            </View>
+            ) : null}
 
             <Input
               label="Confirm Password"
@@ -522,26 +576,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   passwordRulesTitle: {
     fontSize: 12,
     fontWeight: '900',
+    flex: 1,
+    minWidth: 0,
+  },
+  passwordRulesSummary: {
+    fontSize: 11,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  passwordProgressTrack: {
+    height: 5,
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  passwordProgressFill: {
+    height: '100%',
+    borderRadius: 999,
   },
   passwordRuleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
-  },
-  passwordRuleIcon: {
-    width: 18,
-    fontSize: 12,
-    fontWeight: '900',
+    gap: 8,
+    marginBottom: 6,
+    minHeight: 18,
   },
   passwordRule: {
     flex: 1,
     fontSize: 12,
     fontWeight: '700',
+    minWidth: 0,
+  },
+  passwordRuleStatus: {
+    fontSize: 11,
+    fontWeight: '900',
+    minWidth: 46,
+    textAlign: 'right',
   },
   messageBanner: {
     borderWidth: 1,

@@ -29,6 +29,7 @@ import { useAuth } from '../auth/AuthContext';
 import { getCases, CaseItem } from '../services/caseService';
 import { getFilesByCase, EvidenceFile } from '../services/fileService';
 import { getTimelineByCase, TimelineEvent } from '../services/timelineService';
+import { confirmDialog } from '../utils/confirm';
 
 export const Sidebar: React.FC = () => {
   const { theme, isDark, toggleTheme } = useTheme();
@@ -96,6 +97,18 @@ export const Sidebar: React.FC = () => {
       return;
     }
     navigation.navigate(targetRoute);
+  };
+
+  const handleSignOut = async () => {
+    const confirmed = await confirmDialog(
+      'Sign out?',
+      'You will need to log in again to access your forensic workspace.',
+      { confirmLabel: 'Sign out', destructive: false }
+    );
+
+    if (confirmed) {
+      await signOut();
+    }
   };
 
   const isActiveRoute = (t: string) => route.name === t;
@@ -189,15 +202,40 @@ export const Sidebar: React.FC = () => {
           />
         </View>
 
-        <View style={styles.userSection}>
-          <View style={[styles.avatar, { backgroundColor: `${theme.colors.primary}22` }]}>
-            <User size={20} color={theme.colors.primary} />
+        <View
+          style={[
+            styles.userSection,
+            {
+              backgroundColor: theme.colors.surfaceHighlight,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <View style={styles.userIdentity}>
+            <View style={[styles.avatar, { backgroundColor: `${theme.colors.primary}22` }]}>
+              <User size={20} color={theme.colors.primary} />
+            </View>
+            <View style={styles.userInfo}>
+              <Text style={[styles.userName, { color: theme.colors.text.primary }]} numberOfLines={1}>{displayName}</Text>
+              <Text style={[styles.userRole, { color: theme.colors.text.secondary }]} numberOfLines={1}>Forensic Tech</Text>
+            </View>
           </View>
-          <View style={styles.userInfo}>
-            <Text style={[styles.userName, { color: theme.colors.text.primary }]} numberOfLines={1}>{displayName}</Text>
-            <Text style={[styles.userRole, { color: theme.colors.text.secondary }]} numberOfLines={1}>Forensic Tech</Text>
-          </View>
-          <TouchableOpacity onPress={() => signOut()} style={styles.logoutBtn}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+            onPress={handleSignOut}
+            style={[
+              styles.logoutBtn,
+              {
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.surfaceRaised,
+              },
+            ]}
+            activeOpacity={0.78}
+          >
+            <Text style={[styles.logoutText, { color: theme.colors.text.secondary }]}>
+              Sign out
+            </Text>
             <LogOut size={20} color={theme.colors.text.muted} />
           </TouchableOpacity>
         </View>
@@ -224,10 +262,32 @@ const styles = StyleSheet.create({
   footer: { padding: 16, borderTopWidth: 1 },
   themeToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, marginBottom: 8 },
   themeLabel: { fontSize: 14, fontWeight: '500', marginLeft: 12 },
-  userSection: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12 },
+  userSection: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  userIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   avatar: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   userInfo: { flex: 1, marginLeft: 12 },
   userName: { fontSize: 14, fontWeight: '700' },
   userRole: { fontSize: 12, marginTop: 2 },
-  logoutBtn: { padding: 8 },
+  logoutBtn: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  logoutText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
 });

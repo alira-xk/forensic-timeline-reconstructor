@@ -18,7 +18,6 @@ const getEmailConfig = () => {
   const port = parsePort(process.env.SMTP_PORT || process.env.EMAIL_PORT, 465);
 
   return {
-    provider: String(process.env.EMAIL_PROVIDER || process.env.MAIL_PROVIDER || 'smtp').trim().toLowerCase(),
     host: String(process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com').trim(),
     port,
     secure: parseSecure(process.env.SMTP_SECURE || process.env.EMAIL_SECURE, port),
@@ -126,54 +125,6 @@ const sendWithSmtpFailover = async (mailOptions) => {
   throw lastError || new Error('Failed to send email.');
 };
 
-const sendWithResend = async (mailOptions) => {
-  const apiKey = String(process.env.RESEND_API_KEY || '').trim();
-  if (!apiKey) {
-    const error = new Error('Resend API key is missing. Configure RESEND_API_KEY or switch EMAIL_PROVIDER back to smtp.');
-    error.code = 'EMAIL_NOT_CONFIGURED';
-    throw error;
-  }
-
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: mailOptions.from,
-      to: [mailOptions.to],
-      subject: mailOptions.subject,
-      html: mailOptions.html,
-    }),
-  });
-
-  if (!response.ok) {
-    let message = `Resend email request failed with status ${response.status}.`;
-    try {
-      const data = await response.json();
-      message = data?.message || data?.error?.message || message;
-    } catch (e) {
-      // Keep the status-only message when the provider returns a non-JSON body.
-    }
-
-    const error = new Error(message);
-    error.code = 'EMAIL_API_FAILED';
-    throw error;
-  }
-};
-
-const sendEmail = async (mailOptions) => {
-  const config = getEmailConfig();
-
-  if (config.provider === 'resend' || process.env.RESEND_API_KEY) {
-    await sendWithResend(mailOptions);
-    return;
-  }
-
-  await sendWithSmtpFailover(mailOptions);
-};
-
 const stripWrappingQuotes = (value) => {
   const trimmed = String(value || '').trim();
   if (
@@ -217,7 +168,7 @@ const sendPasswordResetEmail = async (to, token) => {
     </div>
   `;
 
-  await sendEmail({
+  await sendWithSmtpFailover({
     from: getFromHeader(),
     to,
     subject: 'Reset your password',
@@ -241,7 +192,7 @@ const sendOtpEmail = async (to, otpCode) => {
     </div>
   `;
 
-  await sendEmail({
+  await sendWithSmtpFailover({
     from: getFromHeader(),
     to,
     subject: 'Your verification code',
