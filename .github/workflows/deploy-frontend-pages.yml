@@ -26,7 +26,7 @@ jobs:
         working-directory: frontend
     env:
       EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
-      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2hhbXBpb24tcmVwdGlsZS0yNC5jbGVyay5hY2NvdW50cy5kZXYk' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -47,10 +47,6 @@ jobs:
       - name: Warn when API URL is missing
         if: ${{ env.EXPO_PUBLIC_API_URL == '' }}
         run: echo "::warning::Set the EXPO_PUBLIC_API_URL repository variable to your deployed backend URL, for example https://your-api.onrender.com/api."
-
-      - name: Warn when Clerk publishable key is missing
-        if: ${{ env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY == '' }}
-        run: echo "::warning::Set the EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY repository variable from your Clerk Dashboard."
 
       - name: Typecheck frontend
         run: npm run typecheck

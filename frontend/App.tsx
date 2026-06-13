@@ -8,7 +8,9 @@ import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { AuthProvider } from './src/auth/AuthContext';
 import { ConfirmationDialog } from './src/components/ConfirmationDialog';
 
-const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const clerkPublishableKey =
+  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+  'pk_test_Y2hhbXBpb24tcmVwdGlsZS0yNC5jbGVyay5hY2NvdW50cy5kZXYk';
 
 const AppContent = () => {
   const { isDark } = useTheme();
@@ -22,10 +24,6 @@ const AppContent = () => {
 };
 
 export default function App() {
-  if (!clerkPublishableKey) {
-    throw new Error('Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY.');
-  }
-
   return (
     <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache}>
       <ThemeProvider>
