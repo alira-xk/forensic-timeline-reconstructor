@@ -200,53 +200,10 @@ const formatClerkSignInRequirement = (resource: any) => {
     : 'Login needs another verification step in Clerk.';
 };
 
-const getEmailCodeSecondFactor = (...resources: any[]) => {
-  for (const resource of resources) {
-    const factor = resource?.supportedSecondFactors?.find(
-      (candidate: any) => candidate?.strategy === 'email_code'
-    );
-
-    if (factor) {
-      return factor;
-    }
+const ensureClerkSuccess = (result: { error?: unknown } | undefined) => {
+  if (result?.error) {
+    throw result.error;
   }
-
-  return null;
-};
-
-const runPasswordSignIn = async (
-  signIn: any,
-  email: string,
-  password: string
-) => {
-  const createdAttempt = await signIn.create({
-    identifier: email,
-    password,
-  });
-  const createdStatus = createdAttempt?.status || signIn.status;
-
-  if (createdStatus === 'complete') {
-    return createdAttempt;
-  }
-
-  if (
-    createdStatus === 'needs_first_factor' &&
-    typeof signIn.attemptFirstFactor === 'function'
-  ) {
-    return signIn.attemptFirstFactor({
-      strategy: 'password',
-      password,
-    });
-  }
-
-  if (typeof signIn.attemptFirstFactor === 'function') {
-    return signIn.attemptFirstFactor({
-      strategy: 'password',
-      password,
-    });
-  }
-
-  return createdAttempt;
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -333,7 +290,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
     const signIn = signInState.signIn as any;
-    const setActive = signInState.setActive;
 
     if (!cleanEmail || !cleanPassword) {
       return {
@@ -343,7 +299,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    if (!signInState.isLoaded || !signIn) {
+    if (!isLoaded || !signIn) {
       return {
         success: false,
         code: 'network_error',
@@ -352,29 +308,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      const attempt = await runPasswordSignIn(signIn, cleanEmail, cleanPassword);
+      ensureClerkSuccess(await signUpState.signUp?.reset?.());
+      ensureClerkSuccess(await signIn.reset());
+      ensureClerkSuccess(
+        await signIn.password({
+          identifier: cleanEmail,
+          password: cleanPassword,
+        })
+      );
 
-      const status = attempt?.status || signIn.status;
-      const createdSessionId = attempt?.createdSessionId || signIn.createdSessionId;
+      const status = signIn.status;
 
-      if (status === 'needs_second_factor') {
-        const emailCodeFactor = getEmailCodeSecondFactor(attempt, signIn);
+      if (status === 'needs_client_trust' || status === 'needs_second_factor') {
+        const supportsEmailCode = signIn.supportedSecondFactors?.some(
+          (factor: any) => factor?.strategy === 'email_code'
+        );
 
-        if (!emailCodeFactor?.emailAddressId) {
+        if (!supportsEmailCode || typeof signIn.mfa?.sendEmailCode !== 'function') {
           return {
             success: false,
             code: 'login_failed',
-            message: formatClerkSignInRequirement(attempt || signIn),
+            message: formatClerkSignInRequirement(signIn),
             email: cleanEmail,
           };
         }
 
-        if (typeof signIn.prepareSecondFactor === 'function') {
-          await signIn.prepareSecondFactor({
-            strategy: 'email_code',
-            emailAddressId: emailCodeFactor.emailAddressId,
-          });
-        }
+        ensureClerkSuccess(await signIn.mfa.sendEmailCode());
 
         return {
           success: false,
@@ -384,19 +343,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
-      if (status !== 'complete' || !createdSessionId) {
+      if (status !== 'complete') {
         return {
           success: false,
           code: 'login_failed',
-          message: formatClerkSignInRequirement(attempt || signIn),
+          message: formatClerkSignInRequirement(signIn),
           email: cleanEmail,
         };
       }
 
-      await setActive?.({ session: createdSessionId });
-      const token = await getToken();
-      const syncedUser = await fetchBackendUser(token).catch(() => null);
-      const nextUser = syncedUser || fallbackUserFromEmail(cleanEmail);
+      ensureClerkSuccess(await signIn.finalize());
+      const nextUser = fallbackUserFromEmail(cleanEmail);
       setUser(nextUser);
 
       return {
@@ -430,7 +387,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    if (!signUpState.isLoaded || !signUpAttempt) {
+    if (!isLoaded || !signUpAttempt) {
       return {
         success: false,
         code: 'network_error',
@@ -439,7 +396,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      if (typeof signUpAttempt.password === 'function') {
+      ensureClerkSuccess(await signInState.signIn?.reset?.());
+      ensureClerkSuccess(await signUpAttempt.reset());
+      ensureClerkSuccess(
         await signUpAttempt.password({
           emailAddress: email,
           password,
@@ -447,25 +406,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           firstName,
           ...(lastName ? { lastName } : {}),
           unsafeMetadata: { name },
-        });
-      } else {
-        await signUpAttempt.create({
-          emailAddress: email,
-          password,
-          username,
-          firstName,
-          ...(lastName ? { lastName } : {}),
-          unsafeMetadata: { name },
-        });
-      }
-
-      if (signUpAttempt.verifications?.sendEmailCode) {
-        await signUpAttempt.verifications.sendEmailCode();
-      } else {
-        await signUpAttempt.prepareEmailAddressVerification({
-          strategy: 'email_code',
-        });
-      }
+        })
+      );
+      ensureClerkSuccess(await signUpAttempt.verifications.sendEmailCode());
 
       return {
         success: false,
@@ -488,7 +431,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanOtp = otpCode.trim();
     const signIn = signInState.signIn as any;
     const signUpAttempt = signUpState.signUp as any;
-    const setActive = signUpState.setActive || signInState.setActive;
 
     if (!cleanEmail || !cleanOtp) {
       return {
@@ -500,26 +442,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       if (
-        signIn?.status === 'needs_second_factor' &&
-        typeof signIn.attemptSecondFactor === 'function'
+        (signIn?.status === 'needs_client_trust' ||
+          signIn?.status === 'needs_second_factor') &&
+        typeof signIn.mfa?.verifyEmailCode === 'function'
       ) {
-        const loginAttempt = await signIn.attemptSecondFactor({
-          strategy: 'email_code',
-          code: cleanOtp,
-        });
-        const loginStatus = loginAttempt?.status || signIn.status;
-        const loginSessionId = loginAttempt?.createdSessionId || signIn.createdSessionId;
+        ensureClerkSuccess(await signIn.mfa.verifyEmailCode({ code: cleanOtp }));
 
-        if (loginStatus !== 'complete' || !loginSessionId) {
+        if (signIn.status !== 'complete') {
           return {
             success: false,
             code: 'invalid_otp',
-            message: formatClerkSignInRequirement(loginAttempt || signIn),
+            message: formatClerkSignInRequirement(signIn),
             email: cleanEmail,
           };
         }
 
-        await setActive?.({ session: loginSessionId });
+        ensureClerkSuccess(await signIn.finalize());
         setUser(fallbackUserFromEmail(cleanEmail));
 
         return {
@@ -529,39 +467,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
-      const attempt = signUpAttempt.verifications?.verifyEmailCode
-        ? await signUpAttempt.verifications.verifyEmailCode({ code: cleanOtp })
-        : await signUpAttempt.attemptEmailAddressVerification({ code: cleanOtp });
-
-      let status = attempt?.status || signUpAttempt.status;
-      let createdSessionId = attempt?.createdSessionId || signUpAttempt.createdSessionId;
-      let latestAttempt = attempt || signUpAttempt;
+      ensureClerkSuccess(
+        await signUpAttempt.verifications.verifyEmailCode({ code: cleanOtp })
+      );
 
       if (
-        status !== 'complete' &&
-        hasMissingUsernameRequirement(latestAttempt) &&
+        signUpAttempt.status !== 'complete' &&
+        hasMissingUsernameRequirement(signUpAttempt) &&
         typeof signUpAttempt.update === 'function'
       ) {
-        latestAttempt = await signUpAttempt.update({
-          username: usernameFromEmail(cleanEmail),
-        });
-        status = latestAttempt?.status || signUpAttempt.status;
-        createdSessionId = latestAttempt?.createdSessionId || signUpAttempt.createdSessionId;
+        ensureClerkSuccess(
+          await signUpAttempt.update({
+            username: usernameFromEmail(cleanEmail),
+          })
+        );
       }
 
-      if (status !== 'complete') {
+      if (signUpAttempt.status !== 'complete') {
         return {
           success: false,
           code: 'invalid_otp',
-          message: formatClerkMissingRequirements(latestAttempt),
+          message: formatClerkMissingRequirements(signUpAttempt),
           email: cleanEmail,
         };
       }
 
-      if (createdSessionId && setActive) {
-        await setActive({ session: createdSessionId });
-        setUser(fallbackUserFromEmail(cleanEmail));
-      }
+      ensureClerkSuccess(await signUpAttempt.finalize());
+      setUser(fallbackUserFromEmail(cleanEmail));
 
       return {
         success: true,
@@ -593,25 +525,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       if (
-        signIn?.status === 'needs_second_factor' &&
-        typeof signIn.prepareSecondFactor === 'function'
+        (signIn?.status === 'needs_client_trust' ||
+          signIn?.status === 'needs_second_factor') &&
+        typeof signIn.mfa?.sendEmailCode === 'function'
       ) {
-        const emailCodeFactor = getEmailCodeSecondFactor(signIn);
-
-        if (!emailCodeFactor?.emailAddressId) {
-          throw new Error('Clerk email verification method is unavailable.');
-        }
-
-        await signIn.prepareSecondFactor({
-          strategy: 'email_code',
-          emailAddressId: emailCodeFactor.emailAddressId,
-        });
-      } else if (signUpAttempt.verifications?.sendEmailCode) {
-        await signUpAttempt.verifications.sendEmailCode();
+        ensureClerkSuccess(await signIn.mfa.sendEmailCode());
+      } else if (signUpAttempt?.verifications?.sendEmailCode) {
+        ensureClerkSuccess(await signUpAttempt.verifications.sendEmailCode());
       } else {
-        await signUpAttempt.prepareEmailAddressVerification({
-          strategy: 'email_code',
-        });
+        throw new Error('No email verification is currently in progress.');
       }
 
       return {
@@ -642,10 +564,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      await signIn.create({
-        strategy: 'reset_password_email_code',
-        identifier: cleanEmail,
-      });
+      ensureClerkSuccess(await signIn.reset());
+      ensureClerkSuccess(await signIn.create({ identifier: cleanEmail }));
+      ensureClerkSuccess(await signIn.resetPasswordEmailCode.sendCode());
 
       return {
         success: true,
@@ -680,11 +601,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      await signIn.attemptFirstFactor({
-        strategy: 'reset_password_email_code',
-        code: cleanCode,
-        password: newPassword,
-      });
+      ensureClerkSuccess(
+        await signIn.resetPasswordEmailCode.verifyCode({ code: cleanCode })
+      );
+
+      if (signIn.status !== 'needs_new_password') {
+        throw new Error('Password reset verification is not complete.');
+      }
+
+      ensureClerkSuccess(
+        await signIn.resetPasswordEmailCode.submitPassword({
+          password: newPassword,
+          signOutOfOtherSessions: true,
+        })
+      );
+      ensureClerkSuccess(await signIn.reset());
 
       return {
         success: true,

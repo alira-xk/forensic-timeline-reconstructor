@@ -76,7 +76,10 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
         setFormError('Please verify your email before login.');
 
         redirectTimer.current = setTimeout(() => {
-          navigation.navigate('OtpVerification', { email: result.email || cleanEmail });
+          navigation.navigate('OtpVerification', {
+            email: result.email || cleanEmail,
+            purpose: 'signup',
+          });
         }, 1200);
 
         return;
@@ -86,7 +89,10 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
         setFormSuccess('Verification code sent. Opening verification...');
 
         redirectTimer.current = setTimeout(() => {
-          navigation.navigate('OtpVerification', { email: result.email || cleanEmail });
+          navigation.navigate('OtpVerification', {
+            email: result.email || cleanEmail,
+            purpose: 'signin',
+          });
         }, 800);
 
         return;

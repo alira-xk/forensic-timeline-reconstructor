@@ -178,7 +178,10 @@ export const SignUpScreen: React.FC<Props> = ({ navigation, route }) => {
         setFormSuccess('OTP sent. Please verify your email.');
 
         redirectTimer.current = setTimeout(() => {
-          navigation.replace('OtpVerification', { email: result.email || cleanEmail });
+          navigation.replace('OtpVerification', {
+            email: result.email || cleanEmail,
+            purpose: 'signup',
+          });
         }, 800);
 
         return;

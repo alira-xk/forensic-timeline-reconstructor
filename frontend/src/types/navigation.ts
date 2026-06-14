@@ -5,7 +5,7 @@ export type RootStackParamList = {
   SignUp: { email?: string } | undefined;
   ForgotPassword: undefined;
   ResetPassword: { email?: string } | undefined;
-  OtpVerification: { email: string };
+  OtpVerification: { email: string; purpose?: 'signin' | 'signup' };
   Main: undefined;
   CreateCase: undefined;
   Settings: undefined;

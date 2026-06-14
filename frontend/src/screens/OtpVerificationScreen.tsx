@@ -27,7 +27,8 @@ export const OtpVerificationScreen: React.FC<Props> = ({ navigation, route }) =>
   const { verifyOtp, resendOtp } = useAuth();
   const { width } = useWindowDimensions();
 
-  const { email } = route.params;
+  const { email, purpose = 'signup' } = route.params;
+  const isSignInVerification = purpose === 'signin';
 
   const [otpCode, setOtpCode] = useState('');
   const [verifying, setVerifying] = useState(false);
@@ -68,11 +69,11 @@ export const OtpVerificationScreen: React.FC<Props> = ({ navigation, route }) =>
       return;
     }
 
-    setFormSuccess('Account verified successfully. Redirecting to login...');
-
-    setTimeout(() => {
-      navigation.replace('Login');
-    }, 1200);
+    setFormSuccess(
+      isSignInVerification
+        ? 'Device verified. Opening your dashboard...'
+        : 'Account verified. Opening your dashboard...'
+    );
   };
 
   const handleResendOtp = async () => {
@@ -106,11 +107,13 @@ export const OtpVerificationScreen: React.FC<Props> = ({ navigation, route }) =>
             <AppLogo size={86} />
 
             <Text style={[styles.title, { color: theme.colors.text.primary }]}>
-              VERIFY EMAIL
+              {isSignInVerification ? 'VERIFY DEVICE' : 'VERIFY EMAIL'}
             </Text>
 
             <Text style={[styles.subtitle, { color: theme.colors.text.secondary }]}>
-              Enter the 6-digit OTP sent to your email.
+              {isSignInVerification
+                ? 'Confirm this new device with the code sent to your email.'
+                : 'Enter the 6-digit OTP sent to your email.'}
             </Text>
           </View>
 
@@ -143,7 +146,7 @@ export const OtpVerificationScreen: React.FC<Props> = ({ navigation, route }) =>
 
               <View style={styles.cardHeaderText}>
                 <Text style={[styles.verifyHeader, { color: theme.colors.text.primary }]}>
-                  OTP Verification
+                  {isSignInVerification ? 'Security Verification' : 'OTP Verification'}
                 </Text>
 
                 <Text style={[styles.verifySubtext, { color: theme.colors.text.secondary }]}>
@@ -199,7 +202,7 @@ export const OtpVerificationScreen: React.FC<Props> = ({ navigation, route }) =>
             ) : null}
 
             <Button
-              title="Verify Account"
+              title={isSignInVerification ? 'Verify and Sign In' : 'Verify Account'}
               onPress={handleVerifyOtp}
               isLoading={verifying}
               style={styles.primaryButton}

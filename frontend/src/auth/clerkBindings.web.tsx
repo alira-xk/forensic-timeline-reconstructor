@@ -1,6 +1,5 @@
 import React from 'react';
-import { ClerkProvider, useAuth, useUser } from '@clerk/react';
-import { useSignIn, useSignUp } from '@clerk/react/legacy';
+import { ClerkProvider, useAuth, useSignIn, useSignUp, useUser } from '@clerk/react';
 
 type AppClerkProviderProps = {
   children: React.ReactNode;
