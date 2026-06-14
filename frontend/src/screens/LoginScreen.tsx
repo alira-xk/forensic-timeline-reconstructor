@@ -111,6 +111,8 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <ScreenWrapper style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         onPress={toggleTheme}
         style={[
           styles.themeToggle,
@@ -283,29 +285,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingVertical: 42,
   },
   themeToggle: {
     position: 'absolute',
     top: 24,
     right: 24,
     zIndex: 10,
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 7,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 22,
+    marginBottom: 24,
   },
   logoContainer: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 28,
+    fontSize: 29,
     fontWeight: '800',
     letterSpacing: 0,
   },
@@ -321,13 +323,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexShrink: 1,
     borderWidth: 1,
-    borderRadius: 20,
-    padding: 26,
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
+    borderRadius: 8,
+    padding: 28,
+    shadowOpacity: 0.06,
+    shadowRadius: 22,
     shadowOffset: {
       width: 0,
-      height: 10,
+      height: 12,
     },
     elevation: 6,
     ...Platform.select({ web: { boxSizing: 'border-box' } as any }),
@@ -354,7 +356,7 @@ const styles = StyleSheet.create({
   cardIcon: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -370,7 +372,7 @@ const styles = StyleSheet.create({
   },
   messageBanner: {
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 7,
     padding: 12,
     marginBottom: 16,
   },

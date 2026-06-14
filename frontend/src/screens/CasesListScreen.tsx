@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Platform,
@@ -32,7 +31,7 @@ type Props = CompositeScreenProps<
 export const CasesListScreen: React.FC<Props> = ({ navigation }) => {
   const { theme } = useTheme();
   const { width } = useWindowDimensions();
-  const isWide = Platform.OS === 'web' && width >= 1120;
+  const isWide = Platform.OS === 'web' && width >= 900;
   const [searchQuery, setSearchQuery] = useState('');
   const [cases, setCases] = useState<CaseItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -117,7 +116,6 @@ export const CasesListScreen: React.FC<Props> = ({ navigation }) => {
       <View style={styles.container}>
         <View style={styles.header}>
           <View style={styles.headerCopy}>
-            <Text style={[styles.eyebrow, { color: theme.colors.primary }]}>CASE WORKSPACE</Text>
             <Text style={[styles.headerTitle, { color: theme.colors.text.primary }]}>Investigations</Text>
             <Text style={[styles.headerSubtitle, { color: theme.colors.text.secondary }]}>
               Search, review, and continue active forensic work.
@@ -151,10 +149,9 @@ export const CasesListScreen: React.FC<Props> = ({ navigation }) => {
           <ListSkeleton rows={5} />
         ) : (
           <FlatList
-            key={isWide ? 'wide' : 'single'}
+            key="case-register"
             data={filteredCases}
-            numColumns={isWide ? 2 : 1}
-            columnWrapperStyle={isWide ? styles.columnWrapper : undefined}
+            numColumns={1}
             keyExtractor={(item) => item._id}
             renderItem={renderCaseItem}
             contentContainerStyle={styles.listContent}
@@ -177,10 +174,14 @@ export const CasesListScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
+    width: '100%',
+    maxWidth: 1180,
+    alignSelf: 'center',
+    paddingHorizontal: 28,
+    paddingTop: 28,
   },
   header: {
-    marginBottom: 24,
+    marginBottom: 22,
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
@@ -191,16 +192,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 240,
   },
-  eyebrow: {
-    fontSize: 11,
+  headerTitle: {
+    fontSize: 27,
     fontWeight: '800',
     marginBottom: 7,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 14,
@@ -212,8 +207,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   iconButton: {
-    width: 46,
-    height: 46,
+    width: 44,
+    height: 44,
     borderWidth: 1,
     borderRadius: 8,
     alignItems: 'center',
@@ -225,12 +220,9 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 48,
   },
-  columnWrapper: {
-    gap: 16,
-  },
   caseCard: {
-    padding: 20,
-    marginBottom: 16,
+    padding: 17,
+    marginBottom: 10,
     flex: 1,
   },
   caseTouchTarget: {
@@ -241,25 +233,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 7,
     backgroundColor: 'rgba(0,0,0,0.03)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 14,
   },
   detailsContainer: {
     flex: 1,
   },
   caseTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     marginBottom: 4,
   },
   caseDescription: {
-    fontSize: 14,
-    marginBottom: 12,
+    fontSize: 13,
+    marginBottom: 10,
   },
   metaRow: {
     flexDirection: 'row',
@@ -268,7 +260,7 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 5,
     marginRight: 12,
   },
   statusText: {

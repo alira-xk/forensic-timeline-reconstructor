@@ -91,7 +91,7 @@ export const Input: React.FC<InputProps> = ({ label, error, style, secureTextEnt
 
 const styles = StyleSheet.create({
     container: {
-        marginBottom: 16,
+        marginBottom: 18,
         alignSelf: 'stretch',
         minWidth: 0,
         ...Platform.select({ web: { boxSizing: 'border-box' } as any }),
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     label: {
         fontSize: 12,
         fontWeight: '800',
-        marginBottom: 8,
+        marginBottom: 7,
         letterSpacing: 0,
     },
     inputWrapper: {
@@ -110,13 +110,13 @@ const styles = StyleSheet.create({
         ...Platform.select({ web: { boxSizing: 'border-box' } as any }),
     },
     input: {
-        minHeight: 48,
-        borderRadius: 14,
-        paddingHorizontal: 15,
-        paddingVertical: 13,
+        minHeight: 50,
+        borderRadius: 7,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
         borderWidth: 1,
         fontSize: 14,
-        fontWeight: '600',
+        fontWeight: '500',
         alignSelf: 'stretch',
         minWidth: 0,
         ...Platform.select({ web: { boxSizing: 'border-box' } as any }),

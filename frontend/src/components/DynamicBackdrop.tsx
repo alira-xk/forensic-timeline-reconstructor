@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, Platform, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { useTheme } from '../theme/ThemeContext';
@@ -19,12 +19,12 @@ export const DynamicBackdrop: React.FC<DynamicBackdropProps> = ({ intensity = 'q
         Animated.timing(drift, {
           toValue: 1,
           duration: 11000,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(drift, {
           toValue: 0,
           duration: 11000,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ])
     );
@@ -48,7 +48,7 @@ export const DynamicBackdrop: React.FC<DynamicBackdropProps> = ({ intensity = 'q
       <LinearGradient
         colors={[
           theme.colors.backdrop.base,
-          theme.dark ? '#0E1622' : '#EDF4FF',
+          theme.dark ? '#0d1522' : '#f8faff',
           theme.colors.backdrop.base,
         ]}
         start={{ x: 0, y: 0 }}
@@ -61,7 +61,7 @@ export const DynamicBackdrop: React.FC<DynamicBackdropProps> = ({ intensity = 'q
           styles.sheen,
           styles.sheenTop,
           {
-            opacity: stronger ? 0.78 : 0.42,
+            opacity: stronger ? 0.46 : 0.2,
             transform: [{ translateX: translateA }, { translateY: translateB }, { rotate: '-9deg' }],
           },
         ]}
@@ -79,7 +79,7 @@ export const DynamicBackdrop: React.FC<DynamicBackdropProps> = ({ intensity = 'q
           styles.sheen,
           styles.sheenBottom,
           {
-            opacity: stronger ? 0.64 : 0.34,
+            opacity: stronger ? 0.36 : 0.16,
             transform: [{ translateX: translateB }, { translateY: translateA }, { rotate: '8deg' }],
           },
         ]}
@@ -119,11 +119,11 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderWidth: 1,
-    opacity: 0.22,
+    opacity: 0.12,
     transform: [{ rotate: '-12deg' }, { scale: 1.2 }],
   },
   gridOffset: {
-    opacity: 0.12,
+    opacity: 0.06,
     transform: [{ rotate: '12deg' }, { scale: 1.16 }],
   },
 });

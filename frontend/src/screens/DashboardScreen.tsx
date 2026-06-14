@@ -401,18 +401,19 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         {/* Modern Header Section */}
         <View style={styles.headerModern}>
             <View>
-              <Text style={[styles.greeting, { color: theme.colors.text.muted }]}>
-                Welcome back,
-              </Text>
               <Text style={[styles.userName, { color: theme.colors.text.primary }]}>
-                {displayName}
+                Welcome back, {displayName}
+              </Text>
+              <Text style={[styles.greeting, { color: theme.colors.text.secondary }]}>
+                Here&apos;s what&apos;s happening with your investigations.
               </Text>
             </View>
             <TouchableOpacity
               onPress={() => setShowSettings(true)}
-              style={[styles.settingsButton, { backgroundColor: theme.colors.surfaceRaised }]}
+              style={[styles.settingsButton, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border }]}
             >
-              <Settings size={22} color={theme.colors.text.secondary} />
+              <Settings size={18} color={theme.colors.text.secondary} />
+              {isWeb ? <Text style={[styles.settingsLabel, { color: theme.colors.text.primary }]}>Settings</Text> : null}
             </TouchableOpacity>
         </View>
 
@@ -432,45 +433,53 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         ) : (
           <>
-            {/* Quick Actions Card - Glassmorphic design */}
-            <Card glass={true} style={styles.quickActionsCard}>
+            <View style={styles.quickActionsCard}>
                 <View style={styles.quickActionsGrid}>
                   <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: `${theme.colors.primary}15` }]}
+                    style={[styles.actionBtn, styles.primaryAction, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}
                     onPress={() => navigation.navigate('CreateCase')}
                   >
-                    <View style={[styles.actionIconBadge, { backgroundColor: theme.colors.primary }]}>
+                    <View style={[styles.actionIconBadge, styles.primaryActionIcon]}>
                       <Plus size={20} color="#fff" />
                     </View>
-                    <Text style={[styles.actionLabel, { color: theme.colors.text.primary }]}>New Case</Text>
+                    <View style={styles.actionCopy}>
+                      <Text style={[styles.actionLabel, { color: '#ffffff' }]}>New Case</Text>
+                      <Text style={styles.primaryActionSubtext}>Start a new investigation</Text>
+                    </View>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: `${theme.colors.accent}15` }]}
+                    style={[styles.actionBtn, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border }]}
                     onPress={() => navigation.navigate('CasesList')}
                   >
-                    <View style={[styles.actionIconBadge, { backgroundColor: theme.colors.accent }]}>
-                      <FolderOpen size={20} color="#fff" />
+                    <View style={[styles.actionIconBadge, { backgroundColor: `${theme.colors.primary}0d` }]}>
+                      <FolderOpen size={20} color={theme.colors.text.secondary} />
                     </View>
-                    <Text style={[styles.actionLabel, { color: theme.colors.text.primary }]}>All Cases</Text>
+                    <View style={styles.actionCopy}>
+                      <Text style={[styles.actionLabel, { color: theme.colors.text.primary }]}>All Cases</Text>
+                      <Text style={[styles.actionSubtext, { color: theme.colors.text.secondary }]}>View and manage cases</Text>
+                    </View>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: `${theme.colors.violet}15` }]}
+                    style={[styles.actionBtn, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border }]}
                     onPress={handleViewLatestTimeline}
                   >
-                    <View style={[styles.actionIconBadge, { backgroundColor: theme.colors.violet }]}>
-                      <BarChart3 size={20} color="#fff" />
+                    <View style={[styles.actionIconBadge, { backgroundColor: `${theme.colors.primary}0d` }]}>
+                      <BarChart3 size={20} color={theme.colors.text.secondary} />
                     </View>
-                    <Text style={[styles.actionLabel, { color: theme.colors.text.primary }]}>Latest Timeline</Text>
+                    <View style={styles.actionCopy}>
+                      <Text style={[styles.actionLabel, { color: theme.colors.text.primary }]}>Latest Timeline</Text>
+                      <Text style={[styles.actionSubtext, { color: theme.colors.text.secondary }]}>Open recent timeline</Text>
+                    </View>
                   </TouchableOpacity>
                 </View>
-            </Card>
+            </View>
 
             {/* Metrics Scroll - Modern Horizontal List */}
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
-                Dashboard Overview
+                Investigation overview
               </Text>
               <TouchableOpacity onPress={loadDashboardData} style={styles.refreshBtn}>
                 <RefreshCcw size={16} color={theme.colors.primary} />
@@ -597,33 +606,42 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   content: {
-    padding: 24,
+    width: '100%',
+    maxWidth: 1260,
+    alignSelf: 'center',
+    paddingHorizontal: 28,
+    paddingTop: 26,
     paddingBottom: 48,
   },
   headerModern: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 24,
   },
   greeting: {
     fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    fontWeight: '500',
+    marginTop: 6,
   },
   userName: {
-    fontSize: 28,
+    fontSize: 27,
     fontWeight: '800',
-    letterSpacing: -0.5,
-    marginTop: 4,
   },
   settingsButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    minWidth: 44,
+    height: 42,
+    paddingHorizontal: 13,
+    borderRadius: 6,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  settingsLabel: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   loadingContainer: {
     padding: 60,
@@ -648,49 +666,71 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   quickActionsCard: {
-    padding: 6,
-    marginBottom: 32,
-    borderRadius: 24,
+    marginBottom: 26,
   },
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 14,
   },
   actionBtn: {
     flex: 1,
-    minWidth: 100,
+    minWidth: 190,
+    minHeight: 82,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 18,
-    gap: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 17,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 13,
+  },
+  primaryAction: {
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 4,
   },
   actionIconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+  },
+  primaryActionIcon: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.68)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  actionCopy: {
+    flex: 1,
   },
   actionLabel: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  actionSubtext: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  primaryActionSubtext: {
+    color: 'rgba(255,255,255,0.78)',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 4,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 13,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
   },
   refreshBtn: {
     flexDirection: 'row',
@@ -698,63 +738,64 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   metricsScrollContent: {
-    paddingBottom: 16,
-    gap: 16,
+    paddingBottom: 14,
+    gap: 10,
   },
   metricCard: {
     width: 140,
-    padding: 16,
-    borderRadius: 20,
-    marginRight: 16,
+    minHeight: 134,
+    padding: 14,
+    borderRadius: 8,
+    marginRight: 4,
   },
   metricTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   metricIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },
   metricValue: {
-    fontSize: 28,
+    fontSize: 25,
     fontWeight: '800',
     marginBottom: 4,
   },
   metricLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
   },
   metricNote: {
     fontSize: 11,
     fontWeight: '600',
   },
   splitLayout: {
-    marginTop: 16,
-    gap: 24,
+    marginTop: 14,
+    gap: 16,
   },
   column: {
     flexDirection: 'column',
   },
   detailsCard: {
     flex: 1,
-    minHeight: 400,
+    minHeight: 390,
   },
   activityCard: {
     flex: 1,
-    minHeight: 400,
+    minHeight: 390,
   },
   cardHeader: {
-    marginBottom: 20,
+    marginBottom: 14,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
   },
   detailsList: {
     flex: 1,
@@ -762,7 +803,7 @@ const styles = StyleSheet.create({
   detailItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
   },
   detailItemContent: {
@@ -770,7 +811,7 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   detailItemTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     marginBottom: 4,
   },

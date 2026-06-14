@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { Animated, Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
 import { useTheme } from '../theme/ThemeContext';
 
@@ -13,7 +13,7 @@ type SkeletonProps = {
 export const Skeleton: React.FC<SkeletonProps> = ({
   height,
   width = '100%',
-  radius = 8,
+  radius = 6,
   style,
 }) => {
   const { theme } = useTheme();
@@ -25,12 +25,12 @@ export const Skeleton: React.FC<SkeletonProps> = ({
         Animated.timing(opacity, {
           toValue: 0.9,
           duration: 850,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(opacity, {
           toValue: 0.45,
           duration: 850,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ])
     );
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
   row: {
     minHeight: 82,
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 6,
     flexDirection: 'row',
     alignItems: 'center',
   },

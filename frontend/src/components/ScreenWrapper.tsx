@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { Sidebar } from './Sidebar';
 import { DynamicBackdrop } from './DynamicBackdrop';
+import { ScreenReveal } from './ScreenReveal';
 
 interface ScreenWrapperProps {
     children: React.ReactNode;
@@ -50,13 +51,13 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
                     styles.webCentering,
                     showSidebar && styles.webWithSidebar
                 ]}>
-                    <View style={[
+                    <ScreenReveal style={[
                         styles.contentContainer,
                         { maxWidth: isWeb && !fullWidth ? CONTENT_MAX_WIDTH : '100%' },
                         style
                     ]}>
                         {children}
-                    </View>
+                    </ScreenReveal>
                 </View>
             </Container>
         </View>
@@ -67,6 +68,7 @@ const styles = StyleSheet.create({
     mainLayout: {
         flex: 1,
         flexDirection: 'row', // Allows Sidebar + Content side-by-side
+        overflow: 'hidden',
     },
     container: {
         flex: 1,

@@ -114,18 +114,19 @@ export const Sidebar: React.FC = () => {
   const isActiveRoute = (t: string) => route.name === t;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+    <View style={[styles.container, { backgroundColor: theme.dark ? '#080d16' : '#0b1423', borderColor: '#223049' }]}>
       <SettingsPopup visible={showSettings} onClose={() => setShowSettings(false)} anchorPosition={{ bottom: 80, left: 24 }} />
 
       {/* Header / Logo */}
       <View style={styles.header}>
-        <AppLogo />
+        <AppLogo size={38} />
+        <Text style={styles.brandName}>Forensic Timeline</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Navigation Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: theme.colors.text.muted }]}>NAVIGATION</Text>
+          <Text style={styles.sectionLabel}>Workspace</Text>
           {navItems.map((item) => {
             const active = isActiveRoute(item.route);
             const Icon = item.icon;
@@ -134,15 +135,15 @@ export const Sidebar: React.FC = () => {
                 key={item.route}
                 style={[
                   styles.navItem,
-                  active && { backgroundColor: `${theme.colors.primary}15` }
+                  active && { backgroundColor: '#2159d5' }
                 ]}
                 onPress={() => handleNavigation(item.route)}
                 activeOpacity={0.7}
               >
-                <Icon size={20} color={active ? theme.colors.primary : theme.colors.text.secondary} />
+                <Icon size={19} color={active ? '#ffffff' : '#9eacc1'} />
                 <Text style={[
                   styles.navText,
-                  { color: active ? theme.colors.primaryStrong : theme.colors.text.primary, fontWeight: active ? '700' : '500' }
+                  { color: active ? '#ffffff' : '#d5ddea', fontWeight: active ? '700' : '600' }
                 ]}>
                   {item.label}
                 </Text>
@@ -152,31 +153,37 @@ export const Sidebar: React.FC = () => {
         </View>
 
         {/* Global Summary */}
-        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surfaceHighlight, borderColor: theme.colors.border }]}>
-          <Text style={[styles.summaryTitle, { color: theme.colors.text.primary }]}>Workspace Summary</Text>
+        <View style={[styles.summaryCard, { backgroundColor: '#111d2f', borderColor: '#26354a' }]}>
+          <View style={styles.summaryHeading}>
+            <Text style={styles.summaryTitle}>Workspace</Text>
+            <View style={styles.onlineRow}>
+              <View style={styles.onlineDot} />
+              <Text style={styles.onlineText}>Online</Text>
+            </View>
+          </View>
           {loading && cases.length === 0 ? (
             <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 16 }} />
           ) : (
             <View style={styles.summaryStats}>
               <View style={styles.statItem}>
-                <Database size={16} color={theme.colors.accent} />
+                <Database size={15} color="#4fd1c5" />
                 <View style={styles.statContent}>
-                  <Text style={[styles.statValue, { color: theme.colors.text.primary }]}>{cases.length}</Text>
-                  <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>Total Cases</Text>
+                  <Text style={styles.statValue}>{cases.length}</Text>
+                  <Text style={styles.statLabel}>Total Cases</Text>
                 </View>
               </View>
               <View style={styles.statItem}>
-                <FileText size={16} color={theme.colors.primary} />
+                <FileText size={15} color="#75a0ff" />
                 <View style={styles.statContent}>
-                  <Text style={[styles.statValue, { color: theme.colors.text.primary }]}>{files.length}</Text>
-                  <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>Evidence Files</Text>
+                  <Text style={styles.statValue}>{files.length}</Text>
+                  <Text style={styles.statLabel}>Evidence Files</Text>
                 </View>
               </View>
               <View style={styles.statItem}>
-                <Activity size={16} color={theme.colors.status.success} />
+                <Activity size={15} color="#49c986" />
                 <View style={styles.statContent}>
-                  <Text style={[styles.statValue, { color: theme.colors.text.primary }]}>{timelineEvents.length}</Text>
-                  <Text style={[styles.statLabel, { color: theme.colors.text.secondary }]}>Events</Text>
+                  <Text style={styles.statValue}>{timelineEvents.length}</Text>
+                  <Text style={styles.statLabel}>Events</Text>
                 </View>
               </View>
             </View>
@@ -186,18 +193,18 @@ export const Sidebar: React.FC = () => {
       </ScrollView>
 
       {/* Footer Area */}
-      <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
+      <View style={[styles.footer, { borderTopColor: '#223049' }]}>
         <View style={styles.themeToggle}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {isDark ? <Moon size={18} color={theme.colors.text.secondary} /> : <Sun size={18} color={theme.colors.text.secondary} />}
-            <Text style={[styles.themeLabel, { color: theme.colors.text.secondary }]}>
+            {isDark ? <Moon size={17} color="#9eacc1" /> : <Sun size={17} color="#9eacc1" />}
+            <Text style={styles.themeLabel}>
               {isDark ? 'Dark Mode' : 'Light Mode'}
             </Text>
           </View>
           <Switch
             value={isDark}
             onValueChange={toggleTheme}
-            trackColor={{ false: theme.colors.border, true: `${theme.colors.primary}44` }}
+            trackColor={{ false: '#2c3a50', true: '#2857a7' }}
             thumbColor={isDark ? theme.colors.primary : '#fff'}
           />
         </View>
@@ -206,18 +213,18 @@ export const Sidebar: React.FC = () => {
           style={[
             styles.userSection,
             {
-              backgroundColor: theme.colors.surfaceHighlight,
-              borderColor: theme.colors.border,
+              backgroundColor: '#111d2f',
+              borderColor: '#26354a',
             },
           ]}
         >
           <View style={styles.userIdentity}>
-            <View style={[styles.avatar, { backgroundColor: `${theme.colors.primary}22` }]}>
-              <User size={20} color={theme.colors.primary} />
+            <View style={[styles.avatar, { backgroundColor: '#2159d5' }]}>
+              <User size={19} color="#ffffff" />
             </View>
             <View style={styles.userInfo}>
-              <Text style={[styles.userName, { color: theme.colors.text.primary }]} numberOfLines={1}>{displayName}</Text>
-              <Text style={[styles.userRole, { color: theme.colors.text.secondary }]} numberOfLines={1}>Forensic Tech</Text>
+              <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
+              <Text style={styles.userRole} numberOfLines={1}>Investigator</Text>
             </View>
           </View>
           <TouchableOpacity
@@ -227,16 +234,16 @@ export const Sidebar: React.FC = () => {
             style={[
               styles.logoutBtn,
               {
-                borderColor: theme.colors.border,
-                backgroundColor: theme.colors.surfaceRaised,
+                borderColor: '#30415a',
+                backgroundColor: 'transparent',
               },
             ]}
             activeOpacity={0.78}
           >
-            <Text style={[styles.logoutText, { color: theme.colors.text.secondary }]}>
+            <Text style={styles.logoutText}>
               Sign out
             </Text>
-            <LogOut size={20} color={theme.colors.text.muted} />
+            <LogOut size={18} color="#9eacc1" />
           </TouchableOpacity>
         </View>
       </View>
@@ -245,36 +252,41 @@ export const Sidebar: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { width: 280, height: '100%', borderRightWidth: 1, zIndex: 10 },
-  header: { padding: 24, paddingBottom: 16 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 24, flexGrow: 1 },
-  section: { marginBottom: 32 },
-  sectionLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12, paddingHorizontal: 8 },
-  navItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 4 },
-  navText: { fontSize: 15, marginLeft: 12 },
-  summaryCard: { padding: 16, borderRadius: 16, borderWidth: 1 },
-  summaryTitle: { fontSize: 13, fontWeight: '700', marginBottom: 16 },
-  summaryStats: { gap: 16 },
+  container: { width: 252, height: '100%', borderRightWidth: 1, zIndex: 10 },
+  header: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 22, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  brandName: { color: '#f5f8fc', fontSize: 17, fontWeight: '800' },
+  scrollContent: { paddingHorizontal: 14, paddingBottom: 22, flexGrow: 1 },
+  section: { marginBottom: 26 },
+  sectionLabel: { color: '#718097', fontSize: 10, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10, paddingHorizontal: 10 },
+  navItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, minHeight: 46, borderRadius: 7, marginBottom: 5 },
+  navText: { fontSize: 14, marginLeft: 12 },
+  summaryCard: { padding: 15, borderRadius: 8, borderWidth: 1 },
+  summaryHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 },
+  summaryTitle: { color: '#f3f6fb', fontSize: 12, fontWeight: '800' },
+  onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#3ddc84' },
+  onlineText: { color: '#9eacc1', fontSize: 10, fontWeight: '600' },
+  summaryStats: { gap: 13 },
   statItem: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   statContent: { flex: 1 },
-  statValue: { fontSize: 16, fontWeight: '800' },
-  statLabel: { fontSize: 12 },
-  footer: { padding: 16, borderTopWidth: 1 },
-  themeToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, marginBottom: 8 },
-  themeLabel: { fontSize: 14, fontWeight: '500', marginLeft: 12 },
+  statValue: { color: '#f3f6fb', fontSize: 14, fontWeight: '800' },
+  statLabel: { color: '#9eacc1', fontSize: 11 },
+  footer: { padding: 14, borderTopWidth: 1 },
+  themeToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 9, marginBottom: 7 },
+  themeLabel: { color: '#b4c0d0', fontSize: 13, fontWeight: '600', marginLeft: 10 },
   userSection: {
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
   },
   userIdentity: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  avatar: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   userInfo: { flex: 1, marginLeft: 12 },
-  userName: { fontSize: 14, fontWeight: '700' },
-  userRole: { fontSize: 12, marginTop: 2 },
+  userName: { color: '#f3f6fb', fontSize: 13, fontWeight: '800' },
+  userRole: { color: '#9eacc1', fontSize: 11, marginTop: 2 },
   logoutBtn: {
     minHeight: 38,
     flexDirection: 'row',
@@ -283,11 +295,12 @@ const styles = StyleSheet.create({
     gap: 7,
     marginTop: 12,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
   },
   logoutText: {
+    color: '#d5ddea',
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
   },
 });

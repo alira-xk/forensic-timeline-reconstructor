@@ -68,6 +68,8 @@ export const Button: React.FC<ButtonProps> = ({
 
     return (
         <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={title}
             style={[
                 styles.container,
                 {
@@ -87,7 +89,7 @@ export const Button: React.FC<ButtonProps> = ({
         >
             {variant === 'primary' && !disabled ? (
                 <LinearGradient
-                    colors={[theme.colors.primaryStrong, theme.colors.primary, theme.colors.accent]}
+                    colors={[theme.colors.primaryStrong, theme.colors.primary]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={[styles.gradientFill, fillStyle]}
@@ -107,7 +109,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 0,
-        marginVertical: 4,
+        marginVertical: 3,
     },
     gradientFill: {
         alignItems: 'center',
@@ -137,7 +139,7 @@ const styles = StyleSheet.create({
     },
     text: {
         fontSize: 14,
-        fontWeight: '800',
+        fontWeight: '700',
         letterSpacing: 0,
     },
 });

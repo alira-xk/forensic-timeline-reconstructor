@@ -44,9 +44,9 @@ const MainTabs = () => {
           display: isWeb ? 'none' : 'flex',
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border,
-          height: Platform.OS === 'ios' ? 85 : 65,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-          paddingTop: 8,
+          height: Platform.OS === 'ios' ? 88 : 70,
+          paddingBottom: Platform.OS === 'ios' ? 21 : 9,
+          paddingTop: 9,
           shadowColor: theme.shadows.floating.shadowColor,
           borderTopWidth: 1,
           elevation: 5,
@@ -54,9 +54,9 @@ const MainTabs = () => {
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.text.muted,
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '600',
-          letterSpacing: 0.5,
+          fontSize: 11,
+          fontWeight: '700',
+          letterSpacing: 0,
         },
       }}
     >
@@ -67,7 +67,7 @@ const MainTabs = () => {
           tabBarIcon: ({ color }) => (
             <LayoutDashboard size={22} color={color} />
           ),
-          tabBarLabel: 'OVERVIEW',
+          tabBarLabel: 'Overview',
         }}
       />
 
@@ -76,7 +76,7 @@ const MainTabs = () => {
         component={CasesListScreen}
         options={{
           tabBarIcon: ({ color }) => <FolderOpen size={22} color={color} />,
-          tabBarLabel: 'CASES',
+          tabBarLabel: 'Cases',
         }}
       />
 
@@ -85,7 +85,7 @@ const MainTabs = () => {
         component={TimelineScreen}
         options={{
           tabBarIcon: ({ color }) => <Activity size={22} color={color} />,
-          tabBarLabel: 'TIMELINE',
+          tabBarLabel: 'Timeline',
         }}
       />
     </Tab.Navigator>

@@ -15,9 +15,9 @@ export const Card: React.FC<CardProps> = ({ children, style, glass = false }) =>
         <View style={[
             styles.container,
             {
-                backgroundColor: glass ? theme.colors.surface : (theme.dark ? '#1e293b' : '#ffffff'),
-                borderColor: glass ? 'rgba(255,255,255,0.1)' : theme.colors.border,
-                borderWidth: glass ? 1 : styles.container.borderWidth,
+                backgroundColor: glass ? theme.colors.surface : theme.colors.surfaceRaised,
+                borderColor: theme.colors.border,
+                borderWidth: 1,
                 ...theme.shadows.card
             },
             style
@@ -30,7 +30,7 @@ export const Card: React.FC<CardProps> = ({ children, style, glass = false }) =>
 const styles = StyleSheet.create({
     container: {
         borderRadius: 8,
-        padding: 20,
+        padding: 18,
         marginBottom: 16,
         borderWidth: 1,
         overflow: 'hidden',

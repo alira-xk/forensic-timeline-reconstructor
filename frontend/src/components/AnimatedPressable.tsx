@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import {
   Animated,
+  Platform,
   Pressable,
   PressableProps,
   StyleProp,
@@ -29,7 +30,7 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
       damping: 20,
       mass: 0.5,
       stiffness: 280,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   };
 
