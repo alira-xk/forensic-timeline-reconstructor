@@ -5,6 +5,8 @@ export const API_BASE_URL =
 
 const SESSION_KEY = 'forensic_timeline_session';
 let authTokenProvider: (() => Promise<string | null>) | null = null;
+const CLERK_TOKEN_RETRY_DELAY_MS = 200;
+const CLERK_TOKEN_RETRY_ATTEMPTS = 10;
 
 type SessionPayload = {
   user: { _id: string };
@@ -26,7 +28,18 @@ const getSessionPayload = async (): Promise<SessionPayload | null> => {
 
 export const getAccessToken = async (): Promise<string | null> => {
   if (authTokenProvider) {
-    return authTokenProvider();
+    for (let attempt = 0; attempt < CLERK_TOKEN_RETRY_ATTEMPTS; attempt += 1) {
+      const token = await authTokenProvider();
+      if (token) {
+        return token;
+      }
+
+      if (attempt < CLERK_TOKEN_RETRY_ATTEMPTS - 1) {
+        await new Promise((resolve) => setTimeout(resolve, CLERK_TOKEN_RETRY_DELAY_MS));
+      }
+    }
+
+    return null;
   }
 
   const session = await getSessionPayload();
@@ -80,6 +93,10 @@ export const apiRequest = async (
   options: RequestInit = {}
 ) => {
   const accessToken = await getAccessToken();
+
+  if (authTokenProvider && !accessToken) {
+    throw new Error('Authentication session is still starting. Please try again.');
+  }
 
   const headers = {
     'Content-Type': 'application/json',
